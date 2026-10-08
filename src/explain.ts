@@ -44,6 +44,8 @@ export interface Explainer {
   exampleValues(ctx: StatementContext): Promise<ExampleValue[]>;
   /** `hints` are one-line summaries of the function's own callees ("name: summary"). */
   summarizeFunction(source: string, reason: string, hints?: string[]): Promise<string>;
+  /** Get the current provider ready before the first call. */
+  warmUp(opts?: { quiet?: boolean }): Promise<void>;
   answer(ctx: StatementContext, question: string): Promise<string>;
 }
 
@@ -170,6 +172,10 @@ ${known}${source}`;
   async answer(ctx: StatementContext, question: string): Promise<string> {
     const text = await this.chat(ANSWER_SYSTEM, `${contextPrompt(ctx)}\n\nQuestion: ${question}`, 160);
     return text.trim();
+  }
+
+  async warmUp(opts: { quiet?: boolean } = {}): Promise<void> {
+    await this.provider().warmUp?.(opts);
   }
 
   private chat(system: string, user: string, maxTokens: number): Promise<string> {

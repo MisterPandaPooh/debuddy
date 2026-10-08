@@ -10,6 +10,7 @@ const { ExplainSession } = require('./adapter.bundle.js');
 const explainer = {
   explainStatement: async (ctx) => ({ does: `[stub] ${ctx.statement.slice(0, 30)}`, why: '', watch: '' }),
   summarizeFunction: async () => '[stub summary]',
+  warmUp: async () => {},
   exampleValues: async (ctx) => ctx.vars.map((v) => ({ name: v.split(':')[0], example: '{ …example }', alternative: 'null' })),
   answer: async (ctx, q) => `[stub answer to "${q}" about: ${ctx.statement.slice(0, 20)}]`,
   explainFunction: async (fctx) => ({ summary: '[stub summary]', byLine: new Map(fctx.statements.map((s) => [s.line, { does: `[batch] ${s.text.slice(0, 30)}`, why: '', watch: '', values: [] }])) }),

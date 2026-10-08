@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { errMsg } from './util';
 import { ExplainSession } from './adapter';
-import { initLanguages } from './lang';
+import { initLanguages, supportedLanguageIds } from './lang';
 import { PromptExplainer } from './explain';
 import { ProviderRegistry } from './providers/registry';
 import { SettingsUi } from './settingsUi';
@@ -29,9 +29,21 @@ export function activate(context: vscode.ExtensionContext) {
 
   const settingsUi = new SettingsUi(context.globalStorageUri.fsPath);
   const sessions = new Set<ExplainSession>();
+  // Optional: load the model as soon as a supported file is open, so the first session starts instantly.
+  let preloaded = false;
+  const preload = () => {
+    const doc = vscode.window.activeTextEditor?.document;
+    if (preloaded || !doc || !vscode.workspace.getConfiguration('explain').get<boolean>('preload', false)) return;
+    if (!supportedLanguageIds.includes(doc.languageId)) return;
+    preloaded = true;
+    void src.explainer.warmUp({ quiet: true }).catch(() => (preloaded = false));
+  };
+  preload();
+
   context.subscriptions.push(
     ui,
     settingsUi,
+    vscode.window.onDidChangeActiveTextEditor(preload),
     vscode.commands.registerCommand('explain.configure', () => settingsUi.configure()),
     vscode.debug.onDidChangeActiveDebugSession((s) => setActive(s?.type === 'explain')),
     vscode.debug.onDidTerminateDebugSession(() => setActive(vscode.debug.activeDebugSession?.type === 'explain')),

@@ -45,7 +45,22 @@
     "onDebug",
     "onCommand:explain.startHere",
     "onCommand:explain.autoWalk",
-    "onCommand:explain.configure"
+    "onCommand:explain.configure",
+    "onLanguage:typescript",
+    "onLanguage:javascript",
+    "onLanguage:typescriptreact",
+    "onLanguage:javascriptreact",
+    "onLanguage:python",
+    "onLanguage:rust",
+    "onLanguage:go",
+    "onLanguage:java",
+    "onLanguage:kotlin",
+    "onLanguage:csharp",
+    "onLanguage:cpp",
+    "onLanguage:c",
+    "onLanguage:swift",
+    "onLanguage:php",
+    "onLanguage:ruby"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -449,6 +464,12 @@
           "default": "hf:Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/qwen2.5-coder-3b-instruct-q4_k_m.gguf",
           "description": "Advanced: GGUF for the embedded provider, as hf:<owner>/<repo>/<file.gguf>. The default is the measured sweet spot; for other sizes use Ollama.",
           "scope": "machine"
+        },
+        "explain.preload": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "description": "Load the model as soon as a supported file is open (uses the model's memory even if you never start a session). Off: the model loads when a session starts, overlapping with the first explanation."
         }
       }
     }

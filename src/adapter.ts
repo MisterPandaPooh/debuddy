@@ -130,6 +130,9 @@ export class ExplainSession extends DebugSession {
     }
     this.stack = [frame];
     this.sendResponse(response);
+    // Warm the provider in parallel with the first explanation; the status bar says why it may take a moment.
+    const warm = this.src.explainer.warmUp().catch((err) => this.log(`warm-up: ${errMsg(err)}`));
+    vscode.window.setStatusBarMessage('$(sync~spin) DeBuddy: loading model…', warm);
     void this.stopAt('entry', true);
   }
 

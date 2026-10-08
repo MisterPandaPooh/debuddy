@@ -7,6 +7,15 @@ export class OllamaProvider implements ChatProvider {
     this.name = `ollama/${opts.model}`;
   }
 
+  /** An empty generate call makes Ollama load the weights and keep them resident. */
+  async warmUp(): Promise<void> {
+    try {
+      await fetch(`${this.opts.url}/api/generate`, { method: 'POST', body: JSON.stringify({ model: this.opts.model, keep_alive: '10m' }) });
+    } catch {
+      /* Ollama down: the first real call reports it */
+    }
+  }
+
   async chat(system: string, user: string, maxTokens: number): Promise<string> {
     const res = await fetch(`${this.opts.url}/api/chat`, {
       method: 'POST',

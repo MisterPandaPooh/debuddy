@@ -69,6 +69,10 @@ class ClaudeSession {
     }
   }
 
+  ensureSpawned() {
+    if (!this.child) this.respawn();
+  }
+
   private respawn() {
     this.child?.kill();
     this.turns = 0;
@@ -141,6 +145,11 @@ export class ClaudeSessionProvider implements ChatProvider {
     const size = Math.max(1, opts.size ?? 3);
     this.sessions = Array.from({ length: size }, () => new ClaudeSession(opts));
     this.queues = this.sessions.map(() => Promise.resolve());
+  }
+
+  /** Spawn the first session now: its ~10 s bootstrap then overlaps with the walker and the first read. */
+  async warmUp(): Promise<void> {
+    this.sessions[0].ensureSpawned();
   }
 
   chat(system: string, user: string): Promise<string> {

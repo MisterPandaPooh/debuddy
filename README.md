@@ -152,6 +152,7 @@ only to the service you chose.
 | `explain.prefetch` | `3` | statements prepared ahead while you read |
 | `explain.context.definitionDepth` | `2` | go-to-definition levels fed to the model |
 | `explain.exampleValues` | `true` | one extra local call per statement for example values |
+| `explain.preload` | `false` | load the model as soon as a supported file is open (otherwise it loads when a session starts, overlapping with the first explanation) |
 
 ## How it is built
 

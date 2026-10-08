@@ -129,6 +129,12 @@ export class EmbeddedProvider implements ChatProvider, vscode.Disposable {
     return { r, seq: r.free.pop()! };
   }
 
+  /** Load the model now so the first explanation does not pay the ~1 s load; quiet = only if already on disk. */
+  async warmUp(opts: { quiet?: boolean } = {}): Promise<void> {
+    if (opts.quiet && !isEmbeddedModelDownloaded(this.dir, this.id)) return;
+    await this.load();
+  }
+
   async chat(system: string, user: string, maxTokens: number): Promise<string> {
     const { r, seq } = await this.acquire();
     try {
