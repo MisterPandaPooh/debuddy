@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <img src="images/keys/cmd.svg" height="96" alt="⌘"><img src="images/keys/plus.svg" height="96" alt="+"><img src="images/keys/alt.svg" height="96" alt="⌥"><img src="images/keys/plus.svg" height="96" alt="+"><img src="images/keys/e.svg" height="96" alt="E">
+  <img src="images/keys/cmd.png" height="96" alt="⌘"><img src="images/keys/plus.png" height="96" alt="+"><img src="images/keys/alt.png" height="96" alt="⌥"><img src="images/keys/plus.png" height="96" alt="+"><img src="images/keys/e.png" height="96" alt="E">
   <br>
   <sub>Put the cursor on any line and press <b>⌘ ⌥ E</b> (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd> on Windows/Linux). That is the whole setup.</sub>
 </p>
