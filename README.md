@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/icon.png" width="96" alt="DeBuddy icon">
+  <img src="images/logo.png" width="112" alt="DeBuddy logo">
 </p>
 
 <h1 align="center">DeBuddy</h1>
