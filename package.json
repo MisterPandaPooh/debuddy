@@ -110,12 +110,12 @@
         },
         {
           "command": "explain.followThrow",
-          "when": "explain.active && explain.canThrow",
+          "when": "explain.active && explain.canThrow && !explain.autoWalking",
           "group": "navigation@1"
         },
         {
           "command": "explain.configure",
-          "when": "explain.active",
+          "when": "explain.active && !explain.autoWalking",
           "group": "navigation@9"
         }
       ],
@@ -127,7 +127,7 @@
         },
         {
           "command": "explain.followThrow",
-          "when": "explain.active && explain.canThrow",
+          "when": "explain.active && explain.canThrow && !explain.autoWalking",
           "group": "navigation@1"
         }
       ]
@@ -149,7 +149,7 @@
         "command": "explain.followThrow",
         "key": "ctrl+alt+x",
         "mac": "cmd+alt+x",
-        "when": "explain.active && explain.canThrow"
+        "when": "explain.active && explain.canThrow && !explain.autoWalking"
       }
     ],
     "breakpoints": [
