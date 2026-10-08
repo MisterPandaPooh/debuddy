@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ExampleValue, Explanation } from './explain';
+import { supportedLanguageIds } from './lang';
 import { Branch, Step } from './lang';
 
 export interface ShowOptions {
@@ -50,7 +51,7 @@ export class HoverValues implements vscode.HoverProvider {
 /** Shows the explanation as a collapsible comment thread right under the current statement. */
 export class ExplainUi implements vscode.Disposable {
   readonly hover = new HoverValues();
-  private hoverReg = vscode.languages.registerHoverProvider(['typescript', 'javascript', 'typescriptreact', 'javascriptreact'], this.hover);
+  private hoverReg = vscode.languages.registerHoverProvider(supportedLanguageIds, this.hover);
   private controller = vscode.comments.createCommentController('explain', 'Explain Mode');
   private thread?: vscode.CommentThread;
   private output = vscode.window.createOutputChannel('Explain Mode');

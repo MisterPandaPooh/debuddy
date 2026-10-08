@@ -23,7 +23,7 @@ export async function stepThrows(frame: Frame, step: Step): Promise<string[]> {
     const loc = await resolveProjectCallee(frame.uri, call);
     if (!loc) continue;
     const target = await vscode.workspace.openTextDocument(loc.uri);
-    const callee = frameAt(target, loc.range.start.line + 1);
+    const callee = await frameAt(target, loc.range.start.line + 1);
     if (callee) out.push(...callee.throws.map((t) => `${t} (from ${call.name})`));
   }
   return out;
@@ -44,7 +44,7 @@ export async function buildContext(frame: Frame, step: Step, src: ContextSources
     if (loc) {
       // Project function: feed its cached one-line summary (works better than raw code on a 3B).
       const target = await vscode.workspace.openTextDocument(loc.uri);
-      const callee = frameAt(target, loc.range.start.line + 1);
+      const callee = await frameAt(target, loc.range.start.line + 1);
       if (callee) {
         if (src.slow?.()) {
           // One round-trip matters more than tokens: a big model reads the callee itself.
@@ -114,7 +114,7 @@ export async function buildFunctionContext(frame: Frame, src: ContextSources): P
       const loc = await resolveProjectCallee(frame.uri, call);
       if (loc) {
         const target = await vscode.workspace.openTextDocument(loc.uri);
-        const callee = frameAt(target, loc.range.start.line + 1);
+        const callee = await frameAt(target, loc.range.start.line + 1);
         if (callee) {
           callees.set(call.name, `${call.name}:\n${excerpt(callee.source, 25)}`);
           throws.push(...callee.throws.map((t) => `${t} (from ${call.name}) at L${step.line}`));
@@ -183,7 +183,7 @@ export async function summarizeFrame(
         const loc = await resolveProjectCallee(frame.uri, call);
         if (!loc) return undefined;
         const doc = await vscode.workspace.openTextDocument(loc.uri);
-        const callee = frameAt(doc, loc.range.start.line + 1);
+        const callee = await frameAt(doc, loc.range.start.line + 1);
         if (!callee || visited.has(`${callee.uri.fsPath}:${callee.startLine}`)) return undefined;
         return `${call.name}: ${await summarizeFrame(callee, src, depth - 1, visited)}`;
       }),

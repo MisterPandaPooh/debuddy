@@ -52,7 +52,7 @@
       "editor/context": [
         {
           "command": "explain.startHere",
-          "when": "editorLangId =~ /typescript|javascript/",
+          "when": "editorLangId =~ /^(typescript|javascript|typescriptreact|javascriptreact|python|rust|go|java|kotlin|scala|csharp|cpp|c|objective-c|dart|swift|php|ruby)$/",
           "group": "navigation@1"
         }
       ],
@@ -91,7 +91,7 @@
         "command": "explain.startHere",
         "key": "ctrl+alt+e",
         "mac": "cmd+alt+e",
-        "when": "editorTextFocus && !inDebugMode"
+        "when": "editorTextFocus && !inDebugMode && editorLangId =~ /^(typescript|javascript|typescriptreact|javascriptreact|python|rust|go|java|kotlin|scala|csharp|cpp|c|objective-c|dart|swift|php|ruby)$/"
       },
       {
         "command": "explain.autoWalk",
@@ -112,6 +112,54 @@
       },
       {
         "language": "javascript"
+      },
+      {
+        "language": "typescriptreact"
+      },
+      {
+        "language": "javascriptreact"
+      },
+      {
+        "language": "python"
+      },
+      {
+        "language": "rust"
+      },
+      {
+        "language": "go"
+      },
+      {
+        "language": "java"
+      },
+      {
+        "language": "kotlin"
+      },
+      {
+        "language": "scala"
+      },
+      {
+        "language": "csharp"
+      },
+      {
+        "language": "cpp"
+      },
+      {
+        "language": "c"
+      },
+      {
+        "language": "objective-c"
+      },
+      {
+        "language": "dart"
+      },
+      {
+        "language": "swift"
+      },
+      {
+        "language": "php"
+      },
+      {
+        "language": "ruby"
       }
     ],
     "debuggers": [
@@ -120,7 +168,23 @@
         "label": "Explain Mode",
         "languages": [
           "typescript",
-          "javascript"
+          "javascript",
+          "typescriptreact",
+          "javascriptreact",
+          "python",
+          "rust",
+          "go",
+          "java",
+          "kotlin",
+          "scala",
+          "csharp",
+          "cpp",
+          "c",
+          "objective-c",
+          "dart",
+          "swift",
+          "php",
+          "ruby"
         ],
         "initialConfigurations": [
           {
@@ -346,14 +410,15 @@
     ]
   },
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:node-llama-cpp --format=cjs --platform=node --sourcemap",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:node-llama-cpp --external:web-tree-sitter --format=cjs --platform=node --sourcemap && node scripts/copy-grammars.js",
     "watch": "npm run build -- --watch",
     "typecheck": "tsc --noEmit",
     "bench": "node bench/bench.mjs",
     "test:dap": "esbuild src/adapter.ts --bundle --platform=node --format=cjs --outfile=test/adapter.bundle.js --alias:vscode=./test/vscode-stub.js && node test/dap.js",
     "test:dap:auto": "EXPLAIN_AUTO=1 npm run test:dap",
     "test:dap:throw": "npm run test:dap >/dev/null && EXPLAIN_SCENARIO=throw node test/dap.js test/fixtures/throwflow.ts 3 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 13 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 10",
-    "test:dap:batch": "EXPLAIN_SLOW=1 npm run test:dap"
+    "test:dap:batch": "EXPLAIN_SLOW=1 npm run test:dap",
+    "test:lang": "esbuild src/lang/index.ts --bundle --platform=node --format=cjs --external:web-tree-sitter --outfile=test/lang.bundle.js --alias:vscode=./test/vscode-stub.js && node scripts/copy-grammars.js && node test/lang.js"
   },
   "devDependencies": {
     "@types/node": "^22",
@@ -364,6 +429,9 @@
     "@vscode/debugadapter": "^1.68.0",
     "@vscode/debugprotocol": "^1.68.0",
     "node-llama-cpp": "^3.22.1",
-    "typescript": "^5.9.3"
+    "tree-sitter-python": "^0.25.0",
+    "tree-sitter-rust": "^0.24.0",
+    "typescript": "^5.9.3",
+    "web-tree-sitter": "^0.27.1"
   }
 }

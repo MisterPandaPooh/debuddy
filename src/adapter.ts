@@ -92,7 +92,7 @@ export class ExplainSession extends DebugSession {
 
   protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchArgs) {
     const doc = await vscode.workspace.openTextDocument(args.file);
-    const frame = frameAt(doc, args.line);
+    const frame = await frameAt(doc, args.line);
     if (!frame) {
       this.sendErrorResponse(response, 1, `No function found at ${path.basename(args.file)}:${args.line}`);
       return;
@@ -415,7 +415,7 @@ export class ExplainSession extends DebugSession {
       if (!loc) continue;
       const doc = await vscode.workspace.openTextDocument(loc.uri);
       const reason = `stepped into from ${caller.name}(), which runs: ${step.text}`;
-      const frame = frameAt(doc, loc.range.start.line + 1, reason);
+      const frame = await frameAt(doc, loc.range.start.line + 1, reason);
       if (!frame) continue;
       this.stack.push(frame);
       void this.stopAt(this.functionBreakpoints.has(frame.name) ? 'function breakpoint' : 'step', true);
@@ -467,7 +467,7 @@ export class ExplainSession extends DebugSession {
       if (!loc) continue;
       const bps = this.breakpoints.get(loc.uri.fsPath);
       const doc = await vscode.workspace.openTextDocument(loc.uri);
-      const frame = frameAt(doc, loc.range.start.line + 1, `stepped into from ${caller.name}(), which runs: ${step.text}`);
+      const frame = await frameAt(doc, loc.range.start.line + 1, `stepped into from ${caller.name}(), which runs: ${step.text}`);
       if (!frame) continue;
       const last = frame.steps[frame.steps.length - 1];
       const hasLine = [...(bps ?? [])].some((l) => l >= frame.startLine && l <= last.endLine);

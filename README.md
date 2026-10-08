@@ -15,6 +15,18 @@ Step through TypeScript/JavaScript like a debugger — nothing runs, a local LLM
 
 Settings live under `explain.*` (provider, context window, definition depth, auto-walk dwell).
 
+## Languages
+
+| Walker | Languages | Precision |
+|---|---|---|
+| TypeScript compiler | TypeScript, JavaScript, TSX, JSX | exact: statements, `if` branches, `try/catch/finally`, throws |
+| tree-sitter (`web-tree-sitter` + a 0.5–1 MB grammar) | Python, Rust | exact: same features; `raise`/`except`, `?`/`Err`/`panic!`, `match` arms as branches |
+| LSP-generic (document symbols + selection ranges + keyword tables) | Go, Java, Kotlin, Scala, C#, C, C++, Objective-C, Dart, Swift, PHP, Ruby | depends on the language server; branches and `try` by indentation/braces |
+
+Adding an exact language = one tree-sitter profile in `src/lang/profiles/` (node types and field
+names of the grammar) + one line in `src/lang/index.ts` + the `.wasm` in `scripts/copy-grammars.js`.
+`npm run test:lang` prints the steps every walker produces on the samples.
+
 ## Providers
 
 `explain.provider` picks the model; everything (steps, summaries, values, console) goes through it.

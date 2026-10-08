@@ -1,6 +1,7 @@
 import { execFile } from 'child_process';
 import * as vscode from 'vscode';
 import { DEFAULT_EMBEDDED, EMBEDDED_LABEL, downloadEmbeddedModel, isEmbeddedModelDownloaded } from './providers/embedded';
+import { supportedLanguageIds } from './lang';
 import { ProviderKind } from './providers/types';
 
 // Measured in bench/RESULTS.md: above ~2 GB latency grows faster than accuracy with this prompt.
@@ -82,7 +83,7 @@ export class SettingsUi implements vscode.Disposable {
 
   private refresh() {
     const lang = vscode.window.activeTextEditor?.document.languageId;
-    if (!lang || !/typescript|javascript/.test(lang)) return this.item.hide();
+    if (!lang || !supportedLanguageIds.includes(lang)) return this.item.hide();
     const c = vscode.workspace.getConfiguration('explain');
     const kind = c.get<ProviderKind>('provider', 'embedded');
     const model =

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ExplainSession } from './adapter';
+import { initLanguages, supportedLanguageIds } from './lang';
 import { PromptExplainer } from './explain';
 import { ProviderRegistry } from './providers/registry';
 import { SettingsUi } from './settingsUi';
@@ -7,6 +8,7 @@ import { TestIndex } from './tests';
 import { ExplainUi } from './ui';
 
 export function activate(context: vscode.ExtensionContext) {
+  initLanguages(context.extensionPath);
   const ui = new ExplainUi();
   const registry = new ProviderRegistry(context.secrets, context.globalStorageUri.fsPath);
   context.subscriptions.push(registry);

@@ -55,5 +55,5 @@ export interface LanguageSupport {
   /** VS Code language ids this implementation handles. */
   readonly languages: string[];
   /** Build the frame for the function containing `line` (1-based); `undefined` if none. */
-  frameAt(doc: vscode.TextDocument, line: number, reason?: string): Frame | undefined;
+  frameAt(doc: vscode.TextDocument, line: number, reason?: string): Frame | undefined | Promise<Frame | undefined>;
 }
