@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ExplainSession } from './adapter';
 import { PromptExplainer } from './explain';
 import { ChatProvider, ClaudeCliProvider, OllamaProvider, OpenAICompatibleProvider, ProviderKind, VscodeLmProvider } from './providers';
+import { SettingsUi } from './settingsUi';
 import { TestIndex } from './tests';
 import { ExplainUi } from './ui';
 
@@ -14,8 +15,11 @@ export function activate(context: vscode.ExtensionContext) {
   const setActive = (on: boolean) => vscode.commands.executeCommand('setContext', 'explain.active', on);
   void setActive(vscode.debug.activeDebugSession?.type === 'explain');
 
+  const settingsUi = new SettingsUi();
   context.subscriptions.push(
     ui,
+    settingsUi,
+    vscode.commands.registerCommand('explain.configure', () => settingsUi.configure()),
     vscode.debug.onDidChangeActiveDebugSession((s) => setActive(s?.type === 'explain')),
     vscode.debug.onDidTerminateDebugSession(() => setActive(vscode.debug.activeDebugSession?.type === 'explain')),
     vscode.debug.registerDebugAdapterDescriptorFactory('explain', {

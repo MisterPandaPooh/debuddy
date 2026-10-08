@@ -40,6 +40,12 @@
         "command": "explain.setApiKey",
         "title": "Explain Mode: Set API key (OpenAI-compatible provider)",
         "category": "Explain"
+      },
+      {
+        "command": "explain.configure",
+        "title": "Explain Mode: Choose provider / model",
+        "category": "Explain",
+        "icon": "$(settings-gear)"
       }
     ],
     "menus": {
@@ -60,6 +66,11 @@
           "command": "explain.followThrow",
           "when": "explain.active && explain.canThrow",
           "group": "navigation@1"
+        },
+        {
+          "command": "explain.configure",
+          "when": "explain.active",
+          "group": "navigation@9"
         }
       ],
       "debug/toolBar": [
