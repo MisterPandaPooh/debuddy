@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <img src="images/walkthrough.png" width="760" alt="DeBuddy stopped on a line: Does / Why / Watch / Throws under the statement">
+  <img src="images/walkthrough.jpg" width="900" alt="DeBuddy stopped on a line: native debug toolbar, call stack, and the Does / Why / Watch / Throws card under the statement">
 </p>
 
 ---
@@ -88,8 +88,18 @@ an OpenAI-compatible API, the Claude Code CLI or the Cursor CLI — see [Provide
 | type in the Debug Console | a question about the current line, answered with its context |
 
 <p align="center">
-  <img src="images/step-into.png" width="380" alt="Step Into: call stack and callee summary">
-  <img src="images/branch.png" width="380" alt="Branch choice on an if">
+  <img src="images/step-into.jpg" width="900" alt="Step Into: the callee's summary, where it is called from, and a question answered in the Debug Console"><br>
+  <sub>Step Into: the callee's one-line summary, <i>Called from</i>, and a question typed in the Debug Console.</sub>
+</p>
+
+<p align="center">
+  <img src="images/branch.jpg" width="900" alt="Branch choice on an if … else"><br>
+  <sub>F10 on an <code>if … else</code>: pick the path to read.</sub>
+</p>
+
+<p align="center">
+  <img src="images/hover.jpg" width="900" alt="Hovering a variable shows an example value matching its type"><br>
+  <sub>Hover a variable: an example value that matches its type, next to the normal language hover.</sub>
 </p>
 
 ## Languages

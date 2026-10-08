@@ -1,7 +1,8 @@
 # Screenshots for the README
 
 Four images, captured in the Extension Development Host on `sample/` (dark theme, ~1200 px wide).
-Save them under `images/` with these exact names; the README already points at them.
+Saved under `images/` (`walkthrough.jpg`, `step-into.jpg`, `branch.jpg`, `hover.jpg`); the README points at them.
+Still missing: `images/providers.png` and the auto-walk GIF.
 
 | File | What to show | How |
 |---|---|---|
