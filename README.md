@@ -28,6 +28,12 @@
 </p>
 
 <p align="center">
+  <img src="images/keys/cmd.svg" height="96" alt="⌘"><img src="images/keys/plus.svg" height="96" alt="+"><img src="images/keys/alt.svg" height="96" alt="⌥"><img src="images/keys/plus.svg" height="96" alt="+"><img src="images/keys/e.svg" height="96" alt="E">
+  <br>
+  <sub>Put the cursor on any line and press <b>⌘ ⌥ E</b> (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd> on Windows/Linux). That is the whole setup.</sub>
+</p>
+
+<p align="center">
   <img src="images/walkthrough.jpg" width="900" alt="DeBuddy stopped on a line: native debug toolbar, call stack, and the Does / Why / Watch / Throws card under the statement">
 </p>
 
