@@ -4,9 +4,9 @@ One-time setup, then a release is a tag push.
 
 ## 1. VS Code Marketplace (one time)
 
-Global Azure DevOps PATs are retired on **2026-12-01**. The durable setup is Microsoft Entra ID
-with a federated credential: GitHub proves who it is through OIDC, nothing expires, no secret to
-rotate. The PAT path still works until then and is kept as a fallback in the workflow.
+No Personal Access Token anywhere (Azure DevOps retires them on 2026-12-01): the Marketplace is
+reached through Microsoft Entra ID with a federated credential — GitHub proves who it is through
+OIDC, nothing expires, nothing to rotate.
 
 ### Publisher
 
@@ -31,25 +31,23 @@ publisher **`MisterPandaPooh`** — the id must equal `"publisher"` in `package.
 That is all: the `Release` workflow signs in with `azure/login` (OIDC) and runs
 `vsce publish --azure-credential` for each VSIX.
 
-### PAT (works until 2026-12-01)
-
-Azure DevOps → user settings → *Personal access tokens* → **Organization: All accessible
-organizations**, **Scopes: Marketplace → Manage**; then `gh secret set VSCE_PAT`.
-
 ### No automation at all
 
 Upload the four VSIX files by hand on the management page (first one with *New extension*, the
 others with *⋯ → Update*). No token of any kind; five minutes per release.
 
-## 2. Open VSX — Cursor, VSCodium, Gitpod (one time)
+## 2. Open VSX = the Cursor marketplace (one time)
+
+Cursor, VSCodium, Windsurf and Gitpod have no registry of their own: their extension panels read
+Open VSX. Publishing there is what puts DeBuddy in Cursor's search results.
 
 1. Sign in at <https://open-vsx.org> with GitHub, accept the Eclipse publisher agreement
    (Profile → *Publisher Agreement*), create an access token (Profile → *Access Tokens*).
 2. Create the namespace once: `npx ovsx create-namespace MisterPandaPooh -p <token>`.
 3. `gh secret set OVSX_PAT` and paste the token (Open VSX is not affected by the Azure PAT retirement; rotate it when it expires).
 
-Without these secrets the release workflow still builds the VSIX files and attaches them to a
-GitHub release; only the two publish steps are skipped.
+Without the Entra variables / the Open VSX token, the release workflow still builds the VSIX
+files and attaches them to a GitHub release; only the publish steps are skipped.
 
 ## 3. Release
 

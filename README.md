@@ -62,7 +62,8 @@ supported natively** (exact syntax walkers); other languages ride on their langu
 **Nothing to configure.** The first explanation downloads a 2.1 GB model (Qwen2.5-Coder 3B)
 into the extension's storage, once, after asking you. Then it is all local, ~0.5 s per line.
 
-- **VS Code Marketplace / Open VSX**: search for *DeBuddy* (when published).
+- **VS Code**: search for *DeBuddy* in the Extensions view (Marketplace).
+- **Cursor, VSCodium, Windsurf**: search for *DeBuddy* in the Extensions view (served by Open VSX).
 - **VSIX**: grab the file for your platform from the [releases page](https://github.com/MisterPandaPooh/debuddy/releases),
   then `Extensions → ⋯ → Install from VSIX…`. Works in **VS Code** and **Cursor**.
 

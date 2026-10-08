@@ -57,10 +57,10 @@ jobs:
       contents: write
       id-token: write
     # `secrets`/`vars` cannot be read in step `if`s; copy them into env and test that instead.
+    # No PAT anywhere: the Marketplace is reached through Entra ID (OIDC), Open VSX through its own token.
     env:
       AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-      VSCE_PAT: ${{ secrets.VSCE_PAT }}
       OVSX_PAT: ${{ secrets.OVSX_PAT }}
     steps:
       - uses: actions/checkout@v4
@@ -90,11 +90,7 @@ jobs:
         if: env.AZURE_CLIENT_ID != ''
         run: for f in vsix/*.vsix; do npx @vscode/vsce publish --azure-credential --packagePath "$f"; done
 
-      # Fallback until global PATs are retired on 2026-12-01.
-      - name: Publish to the VS Code Marketplace (PAT)
-        if: env.AZURE_CLIENT_ID == '' && env.VSCE_PAT != ''
-        run: for f in vsix/*.vsix; do npx @vscode/vsce publish --packagePath "$f"; done
-
-      - name: Publish to Open VSX (Cursor, VSCodium)
+      # Open VSX is the extension registry Cursor, VSCodium, Windsurf and Gitpod use.
+      - name: Publish to Open VSX (Cursor marketplace)
         if: env.OVSX_PAT != ''
         run: for f in vsix/*.vsix; do npx ovsx publish "$f" -p "$OVSX_PAT"; done
