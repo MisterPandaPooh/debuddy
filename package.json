@@ -301,6 +301,19 @@
           },
           "default": [],
           "description": "Extra flags for the Cursor agent CLI, e.g. [\"--mode\", \"ask\"]."
+        },
+        "explain.claude.auth": {
+          "type": "string",
+          "enum": [
+            "subscription",
+            "inherit"
+          ],
+          "default": "subscription",
+          "enumDescriptions": [
+            "Use the Claude Code login only (Pro/Max usage). API-key variables are hidden from the claude process so it can never bill per token.",
+            "Let the claude process see your environment as is (an ANTHROPIC_API_KEY there would be used and billed)."
+          ],
+          "description": "How the Claude CLI authenticates."
         }
       }
     },

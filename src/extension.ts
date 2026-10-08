@@ -140,6 +140,7 @@ class ProviderRegistry implements vscode.Disposable {
           bin: c.get<string>('claude.bin') || undefined,
           extraArgs: [...(effort ? ['--effort', effort] : []), ...c.get<string[]>('claude.extraArgs', [])],
           size: c.get<number>('claude.sessions', 3),
+          auth: c.get<'subscription' | 'inherit'>('claude.auth', 'subscription'),
         };
         if (!c.get<boolean>('claude.persistentSession', true)) return new ClaudeCliProvider(opts);
         const key = JSON.stringify(opts);

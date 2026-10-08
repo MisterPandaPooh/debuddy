@@ -95,15 +95,31 @@ export class VscodeLmProvider implements ChatProvider {
 // Flags that skip Claude Code's session bootstrap (MCP servers, hooks) — the login still applies.
 const CLAUDE_SLIM = ['--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--no-session-persistence', '--tools', ''];
 
-function run(bin: string, args: string[], stdin?: string, cwd?: string): Promise<string> {
+/**
+ * Environment for the claude process. With `subscription`, API-key variables are removed so the
+ * CLI can only use the Claude Code login (Pro/Max usage), never a per-token billed key.
+ */
+function claudeEnv(auth: 'subscription' | 'inherit' | undefined): NodeJS.ProcessEnv {
+  if (auth === 'inherit') return process.env;
+  const env = { ...process.env };
+  for (const k of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX']) delete env[k];
+  return env;
+}
+
+const NOT_LOGGED_IN = /not logged in|please run \/login|authentication/i;
+function loginHint(msg: string): string {
+  return NOT_LOGGED_IN.test(msg) ? `${msg} — open a terminal, run \`claude\` and type /login (subscription), then retry` : msg;
+}
+
+function run(bin: string, args: string[], stdin?: string, cwd?: string, env?: NodeJS.ProcessEnv): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd });
+    const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd, env });
     let out = '';
     let err = '';
     child.stdout.on('data', (d) => (out += d));
     child.stderr.on('data', (d) => (err += d));
     child.on('error', reject);
-    child.on('close', (code) => (code === 0 ? resolve(out) : reject(new Error(`${bin} exited ${code}: ${(err || out).slice(0, 200)}`))));
+    child.on('close', (code) => (code === 0 ? resolve(out) : reject(new Error(loginHint(`${bin} exited ${code}: ${(err || out).slice(0, 200)}`)))));
     child.stdin.end(stdin ?? '');
   });
 }
@@ -112,14 +128,14 @@ function run(bin: string, args: string[], stdin?: string, cwd?: string): Promise
 export class ClaudeCliProvider implements ChatProvider {
   readonly name: string;
   readonly slow = true;
-  constructor(private opts: { model?: string; bin?: string; extraArgs?: string[] }) {
+  constructor(private opts: { model?: string; bin?: string; extraArgs?: string[]; auth?: 'subscription' | 'inherit' }) {
     this.name = `claude-cli/${opts.model || 'default'}`;
   }
 
   chat(system: string, user: string): Promise<string> {
     const args = ['-p', '--output-format', 'text', '--system-prompt', system, ...CLAUDE_SLIM, ...(this.opts.extraArgs ?? [])];
     if (this.opts.model) args.push('--model', this.opts.model);
-    return run(this.opts.bin || 'claude', args, user);
+    return run(this.opts.bin || 'claude', args, user, undefined, claudeEnv(this.opts.auth));
   }
 }
 
@@ -131,7 +147,7 @@ class ClaudeSession {
   private buf = '';
   busy = 0;
 
-  constructor(private opts: { model?: string; bin?: string; maxTurns?: number; extraArgs?: string[] }) {}
+  constructor(private opts: { model?: string; bin?: string; maxTurns?: number; extraArgs?: string[]; auth?: 'subscription' | 'inherit' }) {}
 
   async turn(content: string): Promise<string> {
     this.busy++;
@@ -159,7 +175,7 @@ class ClaudeSession {
       '--system-prompt', 'Each user message is an independent task with its own instructions. Answer only the latest one, follow its format exactly, no preamble.',
       ...(this.opts.extraArgs ?? [])];
     if (this.opts.model) args.push('--model', this.opts.model);
-    const child = spawn(this.opts.bin || 'claude', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(this.opts.bin || 'claude', args, { stdio: ['pipe', 'pipe', 'pipe'], env: claudeEnv(this.opts.auth) });
     this.child = child;
     child.stdout!.on('data', (d) => this.onData(String(d)));
     let err = '';
@@ -167,7 +183,7 @@ class ClaudeSession {
     child.on('error', (e) => this.fail(e));
     child.on('close', (code) => {
       if (this.child === child) this.child = undefined;
-      this.fail(new Error(`claude session exited ${code}: ${err.slice(0, 200)}`));
+      this.fail(new Error(loginHint(`claude session exited ${code}: ${err.slice(0, 200)}`)));
     });
   }
 
@@ -188,7 +204,7 @@ class ClaudeSession {
       const p = this.pending;
       this.pending = undefined;
       if (!p) continue;
-      msg.is_error ? p.reject(new Error(msg.result ?? 'claude session error')) : p.resolve(msg.result ?? '');
+      msg.is_error ? p.reject(new Error(loginHint(msg.result ?? 'claude session error'))) : p.resolve(msg.result ?? '');
     }
   }
 
@@ -214,7 +230,7 @@ export class ClaudeSessionProvider implements ChatProvider {
   private sessions: ClaudeSession[];
   private queues: Promise<unknown>[];
 
-  constructor(opts: { model?: string; bin?: string; maxTurns?: number; extraArgs?: string[]; size?: number }) {
+  constructor(opts: { model?: string; bin?: string; maxTurns?: number; extraArgs?: string[]; size?: number; auth?: 'subscription' | 'inherit' }) {
     this.name = `claude-session/${opts.model || 'default'}`;
     const size = Math.max(1, opts.size ?? 3);
     this.sessions = Array.from({ length: size }, () => new ClaudeSession(opts));
