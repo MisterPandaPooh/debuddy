@@ -78,7 +78,8 @@ export class ExplainSession extends DebugSession {
     response.body = {
       supportsConfigurationDoneRequest: true,
       supportsStepBack: true,
-      supportsEvaluateForHovers: true,
+      // Hover is served by a HoverProvider merged into the language hover (see ui.ts).
+      supportsEvaluateForHovers: false,
       supportsFunctionBreakpoints: true,
       exceptionBreakpointFilters: [
         { filter: 'throw', label: 'Throw statements', description: 'Stop on every `throw`', default: false },
@@ -156,10 +157,7 @@ export class ExplainSession extends DebugSession {
     this.sendResponse(response);
   }
 
-  /**
-   * Hover on an identifier shows its example value or type; the Debug Console asks the model.
-   * Only a hover with nothing to say errors (silently: VS Code then shows the language hover).
-   */
+  /** The Debug Console asks the model; Watch expressions get the example value or a neutral note. Never an error. */
   protected async evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments) {
     const expr = args.expression.trim();
     const ok = (result: string) => {
@@ -177,7 +175,6 @@ export class ExplainSession extends DebugSession {
         const parts = [type ?? expr, known ? `example: ${known.example}` : '', known?.alternative ? `or: ${known.alternative}` : ''];
         return ok(parts.filter(Boolean).join('\n'));
       }
-      if (args.context === 'hover') return this.sendErrorResponse(response, 2, 'not a variable of this walkthrough');
       ok(`${expr}: not a variable declared in ${this.top?.name ?? 'this function'}() (static walkthrough, no runtime values)`);
     } catch (err) {
       this.log(`evaluate: ${err}`);
@@ -595,6 +592,7 @@ export class ExplainSession extends DebugSession {
       void values.then((v) => {
         if (token !== this.explainToken) return;
         this.values = v;
+        this.ui.hover.set(frame.uri, v, ctx.vars);
         this.sendEvent(new InvalidatedEvent(['variables'], THREAD_ID));
       }).catch((err) => this.log(`values: ${err}`));
       // Warm the statements ahead while the user reads this one (explain.prefetch of them).

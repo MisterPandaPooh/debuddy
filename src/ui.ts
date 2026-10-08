@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Explanation } from './explain';
+import { ExampleValue, Explanation } from './explain';
 import { Branch, Step } from './navigator';
 
 export interface ShowOptions {
@@ -11,8 +11,46 @@ export interface ShowOptions {
   lands?: string;
 }
 
+/**
+ * Example values for the statement the walkthrough is stopped on, merged into the editor's
+ * normal hover (the debug hover is disabled: it would replace the language hover and error
+ * on anything that is not a declared variable).
+ */
+export class HoverValues implements vscode.HoverProvider {
+  private uri?: string;
+  private values: ExampleValue[] = [];
+  private types = new Map<string, string>();
+
+  set(uri: vscode.Uri, values: ExampleValue[], vars: string[]) {
+    this.uri = uri.fsPath;
+    this.values = values;
+    this.types = new Map(vars.map((v) => [v.split(':')[0].trim(), v.slice(v.indexOf(':') + 1).trim()]));
+  }
+
+  clear() {
+    this.uri = undefined;
+    this.values = [];
+    this.types.clear();
+  }
+
+  provideHover(doc: vscode.TextDocument, pos: vscode.Position): vscode.Hover | undefined {
+    if (doc.uri.fsPath !== this.uri) return undefined;
+    const range = doc.getWordRangeAtPosition(pos, /[\w$]+/);
+    if (!range) return undefined;
+    const name = doc.getText(range);
+    const v = this.values.find((x) => x.name === name);
+    if (!v) return undefined;
+    const md = new vscode.MarkdownString();
+    md.appendMarkdown(`**Explain** — example value _(illustrative, not runtime)_\n\n`);
+    md.appendCodeblock(`${name} = ${v.example}${v.alternative ? `   // or: ${v.alternative}` : ''}`, doc.languageId);
+    return new vscode.Hover(md, range);
+  }
+}
+
 /** Shows the explanation as a collapsible comment thread right under the current statement. */
 export class ExplainUi implements vscode.Disposable {
+  readonly hover = new HoverValues();
+  private hoverReg = vscode.languages.registerHoverProvider(['typescript', 'javascript', 'typescriptreact', 'javascriptreact'], this.hover);
   private controller = vscode.comments.createCommentController('explain', 'Explain Mode');
   private thread?: vscode.CommentThread;
   private output = vscode.window.createOutputChannel('Explain Mode');
@@ -109,12 +147,14 @@ export class ExplainUi implements vscode.Disposable {
   clear() {
     this.thread?.dispose();
     this.thread = undefined;
+    this.hover.clear();
   }
 
   dispose() {
     this.clear();
     this.clearHighlight();
     this.controller.dispose();
+    this.hoverReg.dispose();
     this.output.dispose();
     this.running.dispose();
     this.status.dispose();
