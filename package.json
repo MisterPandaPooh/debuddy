@@ -2,7 +2,7 @@
   "name": "debuddy",
   "displayName": "DeBuddy",
   "description": "The placebo debugger: step through code like a debugger, nothing runs, everything gets explained \u2014 by a local model, in VS Code or Cursor.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "MisterPandaPooh",
   "license": "MIT",
   "icon": "images/icon.png",

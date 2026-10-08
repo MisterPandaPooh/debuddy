@@ -1,5 +1,11 @@
 # Changelog — DeBuddy
 
+## 0.1.2 — 2026-10-09
+
+- While the auto-walk runs, only Pause / Restart / Stop remain: the throw and settings buttons
+  hide along with ▶▶.
+- README: Marketplace and Open VSX links and live version badges, keycaps, wording.
+
 ## 0.1.1 — 2026-10-09
 
 - The provider warms up when a session starts (status bar: "loading model…"), overlapping with
