@@ -11,6 +11,7 @@ const cases = [
   ['sample/order.service.ts', 14],
   ['sample/orders.py', 10],
   ['sample/orders.rs', 8],
+  ['test/fixtures/throwflow.ts', 10],
 ];
 
 (async () => {
@@ -25,6 +26,7 @@ const cases = [
         s.branches ? `branches=${s.branches.map((b) => `${b.label}:${b.from}-${b.to}`).join(',')}` : '',
         s.handler ? `handler=L${s.handler.line}` : '',
         s.guard ? `guard=${s.guard}` : '',
+        s.body ? `body=${s.body.from}-${s.body.to}` : '',
         s.throwsSelf ? `throws=${s.throwsSelf}` : '',
         s.mayThrow ? `may=${s.mayThrow}` : '',
         s.declared.length ? `decl=[${s.declared.map((d) => d.name)}]` : '',

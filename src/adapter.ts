@@ -286,6 +286,8 @@ export class ExplainSession extends DebugSession {
       return this.followThrow();
     }
     await this.askBranch();
+    // A lone `if` or a loop: the condition's value is unknown, Step Over stays on the main path.
+    if (cur.body && !cur.branches) this.top.skip.push({ label: 'body', ...cur.body });
     this.moveNext() ? void this.stopAt('step') : this.end();
   }
 
@@ -464,6 +466,11 @@ export class ExplainSession extends DebugSession {
     this.sendResponse(response);
     const caller = this.top;
     const step = caller.steps[caller.index];
+    // Step Into on a lone `if` / loop head reads its body (and forgets an earlier skip of it).
+    if (step.body && !step.branches) {
+      caller.skip = caller.skip.filter((b) => !(b.from === step.body!.from && b.to === step.body!.to));
+      return this.moveNext() ? void this.stopAt('step') : this.end();
+    }
     for (const call of step.calls) {
       const frame = await calleeFrame(caller.uri, call, stepIntoReason(caller, step));
       if (!frame) continue;
@@ -636,8 +643,10 @@ export class ExplainSession extends DebugSession {
             : step.branches
               ? '_F10 will ask which branch to follow._'
               : step.guard
-                ? `_Guard clause: when the condition holds, the function ${step.guard}s here; otherwise reading continues below._`
-                : undefined;
+                ? `_Guard clause: when the condition holds, the function ${step.guard}s here. F10 skips the guard, F11 reads it._`
+                : step.body
+                  ? '_Condition unknown: F10 skips this block, F11 reads it._'
+                  : undefined;
       this.ui.show(frame.uri, step.line, explanation, { header, footer, throws: ctx.throws, lands });
       this.sendEvent(new InvalidatedEvent(['variables'], THREAD_ID));
       // Values are a second local call; let them land after the explanation without blocking it.

@@ -95,6 +95,7 @@ function collectSteps(sf: ts.SourceFile, body: ts.Node, doc: vscode.TextDocument
         branches,
         handler: handlers.at(-1),
         guard: ts.isIfStatement(n) ? guardKind(n.thenStatement) : undefined,
+        body: head !== n ? bodyRange(n, doc) : undefined,
         throwsSelf: ts.isThrowStatement(n) ? thrownName(n) : undefined,
         mayThrow: head === n && !ts.isThrowStatement(n) ? nestedThrow(n) : undefined,
       });
@@ -136,6 +137,15 @@ function thrownName(n: ts.ThrowStatement): string {
   const e = n.expression;
   const id = ts.isNewExpression(e) || ts.isCallExpression(e) ? e.expression : e;
   return ts.isIdentifier(id) ? id.text : ts.isPropertyAccessExpression(id) ? id.name.text : 'error';
+}
+
+/** The block a lone `if` or a loop owns, as a line range; `undefined` when the statement forks (if/else). */
+function bodyRange(s: ts.Statement, doc: vscode.TextDocument): { from: number; to: number } | undefined {
+  const body = ts.isIfStatement(s) && !s.elseStatement ? s.thenStatement
+    : ts.isForStatement(s) || ts.isForOfStatement(s) || ts.isForInStatement(s) || ts.isWhileStatement(s) || ts.isDoStatement(s) ? s.statement
+    : undefined;
+  if (!body) return undefined;
+  return { from: doc.positionAt(body.getStart()).line + 1, to: doc.positionAt(body.getEnd()).line + 1 };
 }
 
 /** How an `if` body leaves the function, when it does: `return`, `throw`, `continue`, `break`. */

@@ -460,7 +460,7 @@
     "bench": "node bench/bench.mjs",
     "test:dap": "esbuild src/adapter.ts --bundle --platform=node --format=cjs --outfile=test/adapter.bundle.js --alias:vscode=./test/vscode-stub.js && node test/dap.js",
     "test:dap:auto": "EXPLAIN_AUTO=1 npm run test:dap",
-    "test:dap:throw": "npm run test:dap >/dev/null && EXPLAIN_SCENARIO=throw node test/dap.js test/fixtures/throwflow.ts 3 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 13 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 10 && EXPLAIN_SCENARIO=stepin-continue node test/dap.js test/fixtures/throwflow.ts 3",
+    "test:dap:throw": "npm run test:dap >/dev/null && EXPLAIN_SCENARIO=throw node test/dap.js test/fixtures/throwflow.ts 3 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 13 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 10 && EXPLAIN_SCENARIO=stepin-continue node test/dap.js test/fixtures/throwflow.ts 3 && EXPLAIN_SCENARIO=skip-body node test/dap.js test/fixtures/throwflow.ts 12 && EXPLAIN_SCENARIO=enter-body node test/dap.js test/fixtures/throwflow.ts 12",
     "test:dap:batch": "EXPLAIN_SLOW=1 npm run test:dap",
     "test:lang": "esbuild src/lang/index.ts --bundle --platform=node --format=cjs --external:web-tree-sitter --outfile=test/lang.bundle.js --alias:vscode=./test/vscode-stub.js && node scripts/copy-grammars.js && node test/lang.js"
   },

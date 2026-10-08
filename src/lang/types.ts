@@ -21,6 +21,8 @@ export interface Step {
   handler?: { line: number; text: string };
   /** An `if` whose body leaves the function (return/throw/break/continue): a guard, not a fork worth asking about. */
   guard?: string;
+  /** Body of a lone `if` or a loop: Step Over skips it (the condition's value is unknown), Step Into reads it. */
+  body?: { from: number; to: number };
   /** For `throw` statements: the error being thrown. Certain, so stepping follows it. */
   throwsSelf?: string;
   /** A `throw` nested in a one-line statement (`if (x) throw …`). Possible, not certain. */

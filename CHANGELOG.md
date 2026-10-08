@@ -5,7 +5,9 @@
 First public release.
 
 - Debugger-like static walkthrough: Step Over / Into / Out, run to breakpoint, Step Back,
-  auto-walk (▶▶ / F6), branch choice on `if`, `try` / `catch` / `finally` steps, follow-the-exception.
+  auto-walk (▶▶ / F6), branch choice on `if … else` / `match`, Step Over skips a lone `if` or loop
+  body while Step Into reads it, guard clauses flagged, `try` / `catch` / `finally` steps,
+  follow-the-exception.
 - Explanations as a comment thread under the statement: Does / Why / Watch, deterministic
   **Throws** and where it lands, example values in the hover and Variables view, questions in
   the Debug Console.

@@ -237,7 +237,9 @@ function collectSteps(p: TreeSitterProfile, body: Node, doc: vscode.TextDocument
       const guardBody = bodies[0];
       const lastInBody = guardBody && p.blockTypes.includes(guardBody.type) ? guardBody.namedChildren.at(-1) : guardBody;
       const guard = spec.branching && lastInBody && p.exitTypes?.includes(lastInBody.type) ? lastInBody.type.replace(/_(statement|expression)$/, '') : undefined;
-      push(headStart, headEnd, text, headNode ? [headNode] : [], { branches: branches && branches.length > 1 ? branches : undefined, guard });
+      const forks = !!branches && branches.length > 1;
+      const body = !forks && bodies.length ? { from: lineOf(bodies[0]), to: endLineOf(bodies[bodies.length - 1]) } : undefined;
+      push(headStart, headEnd, text, headNode ? [headNode] : [], { branches: forks ? branches : undefined, guard, body });
       for (const b of bodies) (p.blockTypes.includes(b.type) ? visitBlock : visitStatement)(b);
       for (const c of clauses) {
         const cb = c.namedChildren.find((x) => p.blockTypes.includes(x.type));

@@ -46,6 +46,8 @@ const tick = () => new Promise((r) => setTimeout(r, 50));
     send('continue', { threadId: 1 }); await tick(); await tick();
     return;
   }
+  if (SCENARIO === 'skip-body') { send('next', { threadId: 1 }); await tick(); send('stackTrace', { threadId: 1 }); return; }
+  if (SCENARIO === 'enter-body') { send('stepIn', { threadId: 1 }); await tick(); send('stackTrace', { threadId: 1 }); return; }
   if (SCENARIO === 'next') { send('next', { threadId: 1 }); await tick(); send('next', { threadId: 1 }); await tick(); send('stackTrace', { threadId: 1 }); return; }
   send('continue', { threadId: 1 });
   await tick();

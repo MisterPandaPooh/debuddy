@@ -121,6 +121,11 @@ async function collectSteps(doc: vscode.TextDocument, p: KeywordProfile, startLi
     }
     for (const t of p.mayThrow ?? []) if (t.re.test(stepText) && !step.throwsSelf) step.mayThrow = t.name;
     if (isBranch && /^(if|match|switch)$/.test(isBranch.label)) step.branches = branchesAfter(doc, p, l, endLine);
+    // A lone `if` or a loop owns a block: Step Over skips it, Step Into reads it.
+    if (!step.branches && headOnly && (isBranch?.label === 'if' || /^\s*(for|foreach|while|loop|do)\b/.test(text))) {
+      const to = blockEndLine(doc, p, l, endLine);
+      if (to > l) step.body = { from: l + 1, to };
+    }
     if (isTry) {
       const h = findHandlerLine(doc, p, l, endLine, indent);
       if (h) handlers.push({ line: h, text: doc.lineAt(h - 1).text.trim().replace(/[\s:{]+$/, ''), indent });
@@ -150,6 +155,29 @@ function branchesAfter(doc: vscode.TextDocument, p: KeywordProfile, headLine: nu
     from = l + 1;
   }
   return out.length > 1 ? out : undefined;
+}
+
+/** Last line of the block a head line opens: deeper indentation (python) or the matching brace. */
+function blockEndLine(doc: vscode.TextDocument, p: KeywordProfile, headLine: number, endLine: number): number {
+  const headIndent = doc.lineAt(headLine - 1).firstNonWhitespaceCharacterIndex;
+  if (p.indentBased) {
+    let last = headLine;
+    for (let l = headLine + 1; l <= endLine; l++) {
+      const tl = doc.lineAt(l - 1);
+      if (tl.isEmptyOrWhitespace) continue;
+      if (tl.firstNonWhitespaceCharacterIndex <= headIndent) break;
+      last = l;
+    }
+    return last;
+  }
+  let depth = 0;
+  for (let l = headLine; l <= endLine; l++) {
+    for (const ch of doc.lineAt(l - 1).text) {
+      if (ch === '{') depth++;
+      else if (ch === '}' && --depth === 0) return l;
+    }
+  }
+  return headLine;
 }
 
 function findHandlerLine(doc: vscode.TextDocument, p: KeywordProfile, tryLine: number, endLine: number, indent: number): number | undefined {

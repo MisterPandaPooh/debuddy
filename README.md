@@ -76,7 +76,8 @@ an OpenAI-compatible API, the Claude Code CLI or the Cursor CLI — see [Provide
 | `F10` | next statement, explained |
 | `F11` on `getUser(id)` | inside `getUser`, with its summary and who calls it |
 | `Shift+F11` | back to the call site, on the next statement |
-| `F10` on an `if` | *then / else / both* — pick the path to read |
+| `F10` on an `if … else` | *then / else / both* — pick the path to read |
+| `F10` / `F11` on a lone `if` or a loop | the condition's value is unknown: `F10` stays on the main path (skips the block), `F11` reads it; guards (`if (x) return …`) are flagged as such |
 | `F10` on a `throw` | jumps to the `catch` that receives it, or says it leaves the function |
 | 💥 (toolbar) on a call that *may* throw | follows that possibility instead of the happy path |
 | `F9` then `F5` | runs silently to the breakpoint — across calls, like a debugger |
