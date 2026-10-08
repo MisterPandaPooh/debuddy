@@ -3,7 +3,7 @@
   "displayName": "Explain Mode",
   "description": "Step through code like a debugger \u2014 nothing runs, a local model explains each statement in place.",
   "version": "0.1.0",
-  "publisher": "netanelcs",
+  "publisher": "MisterPandaPooh",
   "license": "MIT",
   "icon": "images/icon.png",
   "repository": {

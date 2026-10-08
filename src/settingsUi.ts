@@ -110,7 +110,7 @@ export class SettingsUi implements vscode.Disposable {
     ];
     const pick = await vscode.window.showQuickPick(items, { placeHolder: 'Explain Mode: which model explains your code?' });
     if (!pick) return;
-    if (!pick.provider) return void vscode.commands.executeCommand('workbench.action.openSettings', '@ext:netanelcs.explain-mode');
+    if (!pick.provider) return void vscode.commands.executeCommand('workbench.action.openSettings', '@ext:MisterPandaPooh.explain-mode');
     await c.update('provider', pick.provider, vscode.ConfigurationTarget.Global);
     await this.pickModel(pick.provider);
   }

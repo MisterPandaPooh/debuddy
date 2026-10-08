@@ -5,7 +5,7 @@ One-time setup, then a release is a tag push.
 ## 1. VS Code Marketplace (one time)
 
 1. Sign in at <https://marketplace.visualstudio.com/manage> with a Microsoft account and create
-   the publisher **`netanelcs`** — the id must equal `"publisher"` in `package.json`.
+   the publisher **`MisterPandaPooh`** — the id must equal `"publisher"` in `package.json`.
 2. Create a Personal Access Token at <https://dev.azure.com> → user settings → *Personal access
    tokens* → **Organization: All accessible organizations**, **Scopes: Marketplace → Manage**,
    expiry up to one year.
@@ -15,7 +15,7 @@ One-time setup, then a release is a tag push.
 
 1. Sign in at <https://open-vsx.org> with GitHub, accept the Eclipse publisher agreement
    (Profile → *Publisher Agreement*), create an access token (Profile → *Access Tokens*).
-2. Create the namespace once: `npx ovsx create-namespace netanelcs -p <token>`.
+2. Create the namespace once: `npx ovsx create-namespace MisterPandaPooh -p <token>`.
 3. `gh secret set OVSX_PAT` and paste the token.
 
 Without these secrets the release workflow still builds the VSIX files and attaches them to a
@@ -45,10 +45,10 @@ VSCE_PAT=… npx @vscode/vsce publish --target darwin-arm64
 
 ## 4. Check
 
-- Marketplace: <https://marketplace.visualstudio.com/items?itemName=netanelcs.explain-mode>
+- Marketplace: <https://marketplace.visualstudio.com/items?itemName=MisterPandaPooh.explain-mode>
   (the page shows the README; relative image links are rewritten to the GitHub repo because
   `repository` is set, so the screenshots must be committed under `images/`).
-- Open VSX: <https://open-vsx.org/extension/netanelcs/explain-mode>.
+- Open VSX: <https://open-vsx.org/extension/MisterPandaPooh/explain-mode>.
 - In a clean VS Code: install, open a TS file, `Cmd/Ctrl+Alt+E`, accept the model download.
 
 ## Notes
