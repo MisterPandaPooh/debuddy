@@ -1,5 +1,6 @@
 import { execFile } from 'child_process';
 import * as vscode from 'vscode';
+import { DEFAULT_EMBEDDED, EMBEDDED_TIERS, downloadEmbeddedModel, isEmbeddedModelDownloaded } from './embedded';
 import { ProviderKind } from './providers';
 
 // Measured in bench/RESULTS.md: above ~2 GB latency grows faster than accuracy with this prompt.
@@ -12,6 +13,7 @@ const OLLAMA_TIERS = [
 ];
 
 const KINDS: { provider: ProviderKind; label: string; detail: string }[] = [
+  { provider: 'embedded', label: 'Embedded (nothing to install)', detail: 'llama.cpp inside VS Code, model downloaded once, ~0.7 s per step' },
   { provider: 'ollama', label: 'Ollama (local)', detail: 'free, ~0.4 s per step with qwen2.5-coder:3b' },
   { provider: 'claude-cli', label: 'Claude Code CLI', detail: 'your Claude login (subscription), ~4 s per call with the persistent session' },
   { provider: 'cursor-cli', label: 'Cursor Agent CLI', detail: 'your Cursor subscription; run `agent login` once' },
@@ -69,7 +71,7 @@ export class SettingsUi implements vscode.Disposable {
   private item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
   private disposables: vscode.Disposable[] = [];
 
-  constructor() {
+  constructor(private storageDir: string) {
     this.item.command = 'explain.configure';
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('explain') && this.refresh()),
@@ -84,7 +86,8 @@ export class SettingsUi implements vscode.Disposable {
     const c = vscode.workspace.getConfiguration('explain');
     const kind = c.get<ProviderKind>('provider', 'ollama');
     const model =
-      kind === 'ollama' ? c.get<string>('model')
+      kind === 'embedded' ? (EMBEDDED_TIERS.find((t) => t.id === c.get<string>('embedded.model', DEFAULT_EMBEDDED))?.label ?? c.get<string>('embedded.model')?.split('/').pop())
+      : kind === 'ollama' ? c.get<string>('model')
       : kind === 'claude-cli' ? c.get<string>('claude.model') || 'default'
       : kind === 'cursor-cli' ? c.get<string>('cursor.model') || 'default'
       : kind === 'vscode-lm' ? c.get<string>('vscodeLm.family') || 'first available'
@@ -114,6 +117,18 @@ export class SettingsUi implements vscode.Disposable {
     const c = vscode.workspace.getConfiguration('explain');
     const set = (key: string, value: string) => c.update(key, value, vscode.ConfigurationTarget.Global);
     switch (kind) {
+      case 'embedded': {
+        type Item = vscode.QuickPickItem & { id: string; downloaded: boolean };
+        const items: Item[] = EMBEDDED_TIERS.map((t) => {
+          const downloaded = isEmbeddedModelDownloaded(this.storageDir, t.id);
+          return { label: t.label, detail: t.detail, description: downloaded ? '$(check) downloaded' : '$(cloud-download) will download', id: t.id, downloaded };
+        });
+        const pick = await vscode.window.showQuickPick(items, { placeHolder: 'Embedded model (stored in the extension folder, downloaded once)' });
+        if (!pick) return;
+        await set('embedded.model', pick.id);
+        if (!pick.downloaded) await downloadEmbeddedModel(this.storageDir, pick.id);
+        return;
+      }
       case 'ollama': {
         const installed = await this.ollamaModels(c.get<string>('ollamaUrl', 'http://localhost:11434'));
         const has = (id: string) => installed.includes(id) || installed.includes(`${id}:latest`);

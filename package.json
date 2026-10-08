@@ -151,6 +151,7 @@
         "explain.provider": {
           "type": "string",
           "enum": [
+            "embedded",
             "ollama",
             "openai",
             "vscode-lm",
@@ -159,6 +160,7 @@
           ],
           "default": "ollama",
           "enumDescriptions": [
+            "llama.cpp inside the extension: nothing to install, the model (explain.embedded.model) is downloaded once into the extension storage. ~0.7 s per step.",
             "Ollama, local (explain.ollamaUrl / explain.model)",
             "Any OpenAI-compatible API: OpenRouter, OpenAI, LM Studio, vLLM (explain.openai.*; key via 'Explain Mode: Set API key')",
             "Models registered in VS Code, e.g. GitHub Copilot (explain.vscodeLm.*). Not available in Cursor.",
@@ -329,6 +331,11 @@
             "Always one call per statement."
           ],
           "description": "Explain a whole function in a single model call and cache every statement from it."
+        },
+        "explain.embedded.model": {
+          "type": "string",
+          "default": "hf:Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+          "description": "GGUF for the embedded provider, as hf:<owner>/<repo>/<file.gguf>. Pick a tier with 'Explain Mode: Choose provider / model'."
         }
       }
     },
@@ -339,7 +346,7 @@
     ]
   },
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:node-llama-cpp --format=cjs --platform=node --sourcemap",
     "watch": "npm run build -- --watch",
     "typecheck": "tsc --noEmit",
     "bench": "node bench/bench.mjs",
@@ -356,6 +363,7 @@
   "dependencies": {
     "@vscode/debugadapter": "^1.68.0",
     "@vscode/debugprotocol": "^1.68.0",
+    "node-llama-cpp": "^3.22.1",
     "typescript": "^5.9.3"
   }
 }

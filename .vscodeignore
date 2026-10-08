@@ -1,0 +1,14 @@
+.vscode/**
+.gitignore
+src/**
+test/**
+bench/**
+sample/**
+tsconfig.json
+dist/**/*.map
+# everything is bundled into dist/ except the native llama.cpp runtime, which stays in node_modules
+node_modules/**
+!node_modules/node-llama-cpp/**
+!node_modules/@node-llama-cpp/**
+!node_modules/lifecycle-utils/**
+!node_modules/ipull/**

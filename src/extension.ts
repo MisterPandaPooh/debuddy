@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ExplainSession } from './adapter';
+import { DEFAULT_EMBEDDED, EmbeddedProvider } from './embedded';
 import { PromptExplainer } from './explain';
 import { ChatProvider, ClaudeCliProvider, ClaudeSessionProvider, CursorCliProvider, OllamaProvider, OpenAICompatibleProvider, ProviderKind, VscodeLmProvider } from './providers';
 import { SettingsUi } from './settingsUi';
@@ -8,7 +9,7 @@ import { ExplainUi } from './ui';
 
 export function activate(context: vscode.ExtensionContext) {
   const ui = new ExplainUi();
-  const registry = new ProviderRegistry(context.secrets);
+  const registry = new ProviderRegistry(context.secrets, context.globalStorageUri.fsPath);
   context.subscriptions.push(registry);
   const src = {
     explainer: new PromptExplainer(
@@ -24,7 +25,7 @@ export function activate(context: vscode.ExtensionContext) {
   const setActive = (on: boolean) => vscode.commands.executeCommand('setContext', 'explain.active', on);
   void setActive(vscode.debug.activeDebugSession?.type === 'explain');
 
-  const settingsUi = new SettingsUi();
+  const settingsUi = new SettingsUi(context.globalStorageUri.fsPath);
   context.subscriptions.push(
     ui,
     settingsUi,
@@ -113,7 +114,10 @@ class ProviderRegistry implements vscode.Disposable {
   /** The persistent Claude session is kept across calls, keyed by its settings. */
   private session?: { key: string; provider: ClaudeSessionProvider };
 
-  constructor(private secrets: vscode.SecretStorage) {
+  /** The in-process llama.cpp model is expensive to load: kept across calls, keyed by its settings. */
+  private embedded?: { key: string; provider: EmbeddedProvider };
+
+  constructor(private secrets: vscode.SecretStorage, private storageDir: string) {
     void secrets.get('explain.openai.apiKey').then((k) => (this.apiKey = k));
   }
 
@@ -126,6 +130,14 @@ class ProviderRegistry implements vscode.Disposable {
   current(): ChatProvider {
     const c = vscode.workspace.getConfiguration('explain');
     switch (c.get<ProviderKind>('provider', 'ollama')) {
+      case 'embedded': {
+        const key = c.get<string>('embedded.model', DEFAULT_EMBEDDED);
+        if (this.embedded?.key !== key) {
+          this.embedded?.provider.dispose();
+          this.embedded = { key, provider: new EmbeddedProvider(this.storageDir, key) };
+        }
+        return this.embedded.provider;
+      }
       case 'openai':
         return new OpenAICompatibleProvider({
           baseUrl: c.get<string>('openai.baseUrl', 'https://openrouter.ai/api/v1'),
@@ -165,6 +177,7 @@ class ProviderRegistry implements vscode.Disposable {
 
   dispose() {
     this.session?.provider.dispose();
+    this.embedded?.provider.dispose();
   }
 }
 

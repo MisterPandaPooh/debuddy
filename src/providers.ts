@@ -9,7 +9,7 @@ export interface ChatProvider {
   chat(system: string, user: string, maxTokens: number): Promise<string>;
 }
 
-export type ProviderKind = 'ollama' | 'openai' | 'vscode-lm' | 'claude-cli' | 'cursor-cli';
+export type ProviderKind = 'embedded' | 'ollama' | 'openai' | 'vscode-lm' | 'claude-cli' | 'cursor-cli';
 
 /** Ollama's native API (default: local, small, fast). */
 export class OllamaProvider implements ChatProvider {
