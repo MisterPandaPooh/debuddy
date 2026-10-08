@@ -157,7 +157,8 @@ npm run bench          # prompt bench against the local model
 ```
 
 Open the repo in VS Code, **F5** → an Extension Development Host on `sample/`. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for how to add a language or a provider.
+[CONTRIBUTING.md](CONTRIBUTING.md) for how to add a language or a provider, and
+[docs/PUBLISHING.md](docs/PUBLISHING.md) for the Marketplace / Open VSX release steps.
 
 VS Code gotchas met here, all silent: `@vscode/debugadapter` dispatches `setBreakpoints` to
 `setBreak**P**ointsRequest`; manifest contributions load only when a host **window starts**
