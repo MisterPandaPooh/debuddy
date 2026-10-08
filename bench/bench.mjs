@@ -8,6 +8,7 @@ Rules:
 - Use ONLY the context given. Never guess what an unknown function does.
 - If a "Resolved definition" or "Hover info" is given, "Does" MUST say what the called function actually does according to it, not just "calls X".
 - Max 12 words per line. No code fences, no backticks.
+- The enclosing function is shown in full; the line marked ">>" is the current statement. "Does" and "Watch" describe ONLY that line. "Why" may use the surrounding lines.
 - "Watch" is for a real pitfall visible in the context: a null/undefined result, a thrown error, an await, a fallback value, a side effect. Otherwise "-".
 - Output exactly this format, nothing else:
 Does: <what happens>
@@ -79,6 +80,10 @@ Collection<T>.find(id: string): Promise<T | null>`,
   },
 ];
 
+function mark(enclosing, line) {
+  return enclosing.split('\n').map((l) => (l.trim() === line.trim() ? '>>' + l.slice(2) : l)).join('\n');
+}
+
 function buildPrompt(c) {
   if (c.summary) {
     return `You are entering this function (stepped into from getUser(), which needs roles to build its response).
@@ -87,7 +92,7 @@ Summarize what it does in at most 3 short lines. Use only the code shown.
 ${c.extra}`;
   }
   return `Enclosing function:
-${ENCLOSING}
+${mark(ENCLOSING, c.line)}
 
 Current statement:
 ${c.line}

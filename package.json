@@ -91,6 +91,21 @@
         "explain.model": {
           "type": "string",
           "default": "qwen2.5-coder:3b"
+        },
+        "explain.context.fullFunctionMaxLines": {
+          "type": "number",
+          "default": 60,
+          "description": "Functions up to this many lines are sent whole; longer ones get a window around the statement."
+        },
+        "explain.context.before": {
+          "type": "number",
+          "default": 15,
+          "description": "Lines before the current statement in the window (long functions only)."
+        },
+        "explain.context.after": {
+          "type": "number",
+          "default": 8,
+          "description": "Lines after the current statement in the window (long functions only)."
         }
       }
     }

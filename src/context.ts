@@ -49,12 +49,23 @@ export async function buildContext(frame: Frame, step: Step, explainer: Explaine
   };
 }
 
-/** Signature + a few lines before the step; lines after are cut so the model does not peek ahead. */
+/**
+ * The whole function with the current statement marked ">>", so "Why" can use what comes
+ * after. Long functions get a window (explain.context.before/after) around the statement.
+ */
 function trimAround(frame: Frame, step: Step): string {
+  const cfg = vscode.workspace.getConfiguration('explain.context');
+  const before = cfg.get<number>('before', 15);
+  const after = cfg.get<number>('after', 8);
+  const maxFull = cfg.get<number>('fullFunctionMaxLines', 60);
+
   const lines = frame.source.split('\n');
-  const rel = step.line - frame.startLine;
-  const from = Math.max(1, rel - 4);
-  const to = Math.min(lines.length - 1, step.endLine - frame.startLine + 1);
-  const body = lines.slice(from, to + 1);
-  return [lines[0], ...(from > 1 ? ['  …'] : []), ...body, ...(to < lines.length - 1 ? ['  …', '}'] : [])].join('\n');
+  const from = step.line - frame.startLine;
+  const to = step.endLine - frame.startLine;
+  const marked = lines.map((l, i) => (i >= from && i <= to ? '>>' + l.slice(2) : l));
+  if (lines.length <= maxFull) return marked.join('\n');
+
+  const lo = Math.max(1, from - before);
+  const hi = Math.min(lines.length - 1, to + after);
+  return [marked[0], ...(lo > 1 ? ['  …'] : []), ...marked.slice(lo, hi + 1), ...(hi < lines.length - 1 ? ['  …', '}'] : [])].join('\n');
 }

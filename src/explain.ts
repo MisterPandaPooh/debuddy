@@ -38,6 +38,7 @@ Rules:
 - Use ONLY the context given. Never guess what an unknown function does.
 - If a "Resolved definition" or "Hover info" is given, "Does" MUST say what the called function actually does according to it, not just "calls X".
 - Max 12 words per line. No code fences, no backticks.
+- The enclosing function is shown with the current statement marked ">>". "Does" and "Watch" describe ONLY that line. "Why" may use the surrounding lines.
 - "Watch" is for a real pitfall visible in the context: a null/undefined result, a thrown error, an await, a fallback value, a side effect. Otherwise "-".
 - Output exactly this format, nothing else:
 Does: <what happens>
