@@ -158,10 +158,10 @@
             "claude-cli",
             "cursor-cli"
           ],
-          "default": "ollama",
+          "default": "embedded",
           "enumDescriptions": [
-            "llama.cpp inside the extension: nothing to install, the model (explain.embedded.model) is downloaded once into the extension storage. ~0.7 s per step.",
-            "Ollama, local (explain.ollamaUrl / explain.model)",
+            "Default. llama.cpp inside the extension with Qwen2.5-Coder 3B (2.1 GB, downloaded once into the extension storage). Nothing to install, ~0.7 s per step.",
+            "Ollama, local, when you want another model size (explain.ollamaUrl / explain.model).",
             "Any OpenAI-compatible API: OpenRouter, OpenAI, LM Studio, vLLM (explain.openai.*; key via 'Explain Mode: Set API key')",
             "Models registered in VS Code, e.g. GitHub Copilot (explain.vscodeLm.*). Not available in Cursor.",
             "Claude Code CLI, reusing your Claude login (subscription or key). A persistent session keeps it at ~4 s per call (explain.claude.*).",
@@ -335,7 +335,7 @@
         "explain.embedded.model": {
           "type": "string",
           "default": "hf:Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/qwen2.5-coder-3b-instruct-q4_k_m.gguf",
-          "description": "GGUF for the embedded provider, as hf:<owner>/<repo>/<file.gguf>. Pick a tier with 'Explain Mode: Choose provider / model'."
+          "description": "Advanced: GGUF for the embedded provider, as hf:<owner>/<repo>/<file.gguf>. The default is the measured sweet spot; for other sizes use Ollama."
         }
       }
     },

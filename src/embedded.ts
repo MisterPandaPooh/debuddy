@@ -3,14 +3,9 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import type { ChatProvider } from './providers';
 
-// Measured in bench/RESULTS.md; the GGUF names follow Qwen's official repos.
-export const EMBEDDED_TIERS = [
-  { id: 'hf:Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf', label: 'Qwen2.5-Coder 0.5B', detail: '0.5 GB · ~0.3 s/line · minimum: correct but shallow' },
-  { id: 'hf:Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf', label: 'Qwen2.5-Coder 1.5B', detail: '1.1 GB · ~0.4 s/line' },
-  { id: 'hf:Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/qwen2.5-coder-3b-instruct-q4_k_m.gguf', label: 'Qwen2.5-Coder 3B', detail: '2.1 GB · ~0.7 s/line · default, best balance' },
-  { id: 'hf:Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/qwen2.5-coder-7b-instruct-q4_k_m.gguf', label: 'Qwen2.5-Coder 7B', detail: '4.7 GB · ~1.5 s/line · slightly deeper, twice slower' },
-];
-export const DEFAULT_EMBEDDED = EMBEDDED_TIERS[2].id;
+// The one embedded model: the measured sweet spot (bench/RESULTS.md). Other sizes go through Ollama.
+export const DEFAULT_EMBEDDED = 'hf:Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/qwen2.5-coder-3b-instruct-q4_k_m.gguf';
+export const EMBEDDED_LABEL = 'Qwen2.5-Coder 3B (2.1 GB)';
 
 type Llama = typeof import('node-llama-cpp');
 

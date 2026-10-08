@@ -1,6 +1,6 @@
 import { execFile } from 'child_process';
 import * as vscode from 'vscode';
-import { DEFAULT_EMBEDDED, EMBEDDED_TIERS, downloadEmbeddedModel, isEmbeddedModelDownloaded } from './embedded';
+import { DEFAULT_EMBEDDED, EMBEDDED_LABEL, downloadEmbeddedModel, isEmbeddedModelDownloaded } from './embedded';
 import { ProviderKind } from './providers';
 
 // Measured in bench/RESULTS.md: above ~2 GB latency grows faster than accuracy with this prompt.
@@ -13,7 +13,7 @@ const OLLAMA_TIERS = [
 ];
 
 const KINDS: { provider: ProviderKind; label: string; detail: string }[] = [
-  { provider: 'embedded', label: 'Embedded (nothing to install)', detail: 'llama.cpp inside VS Code, model downloaded once, ~0.7 s per step' },
+  { provider: 'embedded', label: 'Embedded (default, nothing to install)', detail: `${EMBEDDED_LABEL} inside VS Code, downloaded once, ~0.7 s per step` },
   { provider: 'ollama', label: 'Ollama (local)', detail: 'free, ~0.4 s per step with qwen2.5-coder:3b' },
   { provider: 'claude-cli', label: 'Claude Code CLI', detail: 'your Claude login (subscription), ~4 s per call with the persistent session' },
   { provider: 'cursor-cli', label: 'Cursor Agent CLI', detail: 'your Cursor subscription; run `agent login` once' },
@@ -84,9 +84,9 @@ export class SettingsUi implements vscode.Disposable {
     const lang = vscode.window.activeTextEditor?.document.languageId;
     if (!lang || !/typescript|javascript/.test(lang)) return this.item.hide();
     const c = vscode.workspace.getConfiguration('explain');
-    const kind = c.get<ProviderKind>('provider', 'ollama');
+    const kind = c.get<ProviderKind>('provider', 'embedded');
     const model =
-      kind === 'embedded' ? (EMBEDDED_TIERS.find((t) => t.id === c.get<string>('embedded.model', DEFAULT_EMBEDDED))?.label ?? c.get<string>('embedded.model')?.split('/').pop())
+      kind === 'embedded' ? (c.get<string>('embedded.model', DEFAULT_EMBEDDED) === DEFAULT_EMBEDDED ? 'Qwen2.5-Coder 3B' : c.get<string>('embedded.model')?.split('/').pop())
       : kind === 'ollama' ? c.get<string>('model')
       : kind === 'claude-cli' ? c.get<string>('claude.model') || 'default'
       : kind === 'cursor-cli' ? c.get<string>('cursor.model') || 'default'
@@ -100,7 +100,7 @@ export class SettingsUi implements vscode.Disposable {
   /** Two-step QuickPick: provider, then model (listed live where possible). */
   async configure() {
     const c = vscode.workspace.getConfiguration('explain');
-    const current = c.get<ProviderKind>('provider', 'ollama');
+    const current = c.get<ProviderKind>('provider', 'embedded');
     type Item = vscode.QuickPickItem & { provider?: ProviderKind };
     const items: Item[] = [
       ...KINDS.map((k) => ({ ...k, description: k.provider === current ? '$(check) current' : '' })),
@@ -118,15 +118,13 @@ export class SettingsUi implements vscode.Disposable {
     const set = (key: string, value: string) => c.update(key, value, vscode.ConfigurationTarget.Global);
     switch (kind) {
       case 'embedded': {
-        type Item = vscode.QuickPickItem & { id: string; downloaded: boolean };
-        const items: Item[] = EMBEDDED_TIERS.map((t) => {
-          const downloaded = isEmbeddedModelDownloaded(this.storageDir, t.id);
-          return { label: t.label, detail: t.detail, description: downloaded ? '$(check) downloaded' : '$(cloud-download) will download', id: t.id, downloaded };
-        });
-        const pick = await vscode.window.showQuickPick(items, { placeHolder: 'Embedded model (stored in the extension folder, downloaded once)' });
-        if (!pick) return;
-        await set('embedded.model', pick.id);
-        if (!pick.downloaded) await downloadEmbeddedModel(this.storageDir, pick.id);
+        // One model, no choice to make: just make sure it is on disk.
+        const id = c.get<string>('embedded.model', DEFAULT_EMBEDDED);
+        if (isEmbeddedModelDownloaded(this.storageDir, id)) {
+          void vscode.window.setStatusBarMessage(`$(check) Explain: ${EMBEDDED_LABEL} is downloaded`, 4000);
+        } else {
+          await downloadEmbeddedModel(this.storageDir, id);
+        }
         return;
       }
       case 'ollama': {

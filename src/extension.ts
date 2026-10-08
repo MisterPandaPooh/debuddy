@@ -129,7 +129,7 @@ class ProviderRegistry implements vscode.Disposable {
 
   current(): ChatProvider {
     const c = vscode.workspace.getConfiguration('explain');
-    switch (c.get<ProviderKind>('provider', 'ollama')) {
+    switch (c.get<ProviderKind>('provider', 'embedded')) {
       case 'embedded': {
         const key = c.get<string>('embedded.model', DEFAULT_EMBEDDED);
         if (this.embedded?.key !== key) {

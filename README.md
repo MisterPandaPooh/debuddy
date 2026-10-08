@@ -5,7 +5,9 @@ Step through TypeScript/JavaScript like a debugger — nothing runs, a local LLM
 
 ## Use
 
-1. `ollama pull qwen2.5-coder:3b` (Ollama must be running).
+1. Nothing to install: the first explanation downloads Qwen2.5-Coder 3B (2.1 GB) into the
+   extension storage, with a progress bar. (Ollama, Copilot, Claude Code and Cursor are optional
+   providers, see below.)
 2. Open a `.ts`/`.js` file, cursor on a line, `Cmd+Alt+E` ("Explain Mode: Start Here").
 3. Native debug controls: F10 step over (asks which branch on an `if`), F11 step into,
    Shift+F11 step out, F5 run to the next breakpoint, ◀ step back, `Cmd+Alt+A` / ▶▶ auto-walk
@@ -19,8 +21,8 @@ Settings live under `explain.*` (provider, context window, definition depth, aut
 
 | Provider | Needs | Per-step latency | Notes |
 |---|---|---|---|
-| `embedded` | nothing: llama.cpp (`node-llama-cpp`) runs inside the extension host, the GGUF is downloaded once into the extension storage with a progress bar | ~0.7 s | same models and quality as Ollama, no install; +55 MB of extension (native binary per platform) |
-| `ollama` (default) | Ollama + `qwen2.5-coder:3b` | ~0.4 s | local, free; the prompts are tuned for it. Tiers measured in [bench/RESULTS.md](bench/RESULTS.md): `qwen2.5-coder:0.5b` (0.4 GB, 0.2 s) → `qwen2.5-coder:3b` (1.9 GB, default) → `qwen2.5-coder:7b` (4.7 GB) → `qwen2.5:14b` (9 GB); above 2 GB latency grows faster than accuracy |
+| `embedded` (default) | nothing: llama.cpp (`node-llama-cpp`) runs inside the extension host; Qwen2.5-Coder 3B is downloaded once into the extension storage with a progress bar | ~0.7 s | one model only, the measured sweet spot; +55 MB of extension (native binary per platform) |
+| `ollama` | Ollama + any model (`explain.model`) | ~0.4 s | local, free; the prompts are tuned for it. Tiers measured in [bench/RESULTS.md](bench/RESULTS.md): `qwen2.5-coder:0.5b` (0.4 GB, 0.2 s) → `qwen2.5-coder:3b` (1.9 GB, default) → `qwen2.5-coder:7b` (4.7 GB) → `qwen2.5:14b` (9 GB); above 2 GB latency grows faster than accuracy |
 | `openai` | `explain.openai.baseUrl` + `Explain Mode: Set API key` | 1–3 s | OpenRouter, OpenAI, LM Studio, vLLM, Ollama's `/v1`; the key lives in VS Code secret storage |
 | `vscode-lm` | GitHub Copilot (or any Language Model Chat Provider extension) | 1–3 s | one consent prompt; **not available in Cursor** |
 | `claude-cli` | Claude Code CLI signed in (subscription or API key) | ~4 s | one persistent `stream-json` session (`explain.claude.persistentSession`); the CLI is an agent harness, so it never gets as fast as a chat API |
