@@ -23,6 +23,12 @@
         "command": "explain.startHere",
         "title": "Explain Mode: Start Here",
         "category": "Explain"
+      },
+      {
+        "command": "explain.autoWalk",
+        "title": "Explain Mode: Auto-walk",
+        "category": "Explain",
+        "icon": "$(run-all)"
       }
     ],
     "menus": {
@@ -32,6 +38,13 @@
           "when": "editorLangId =~ /typescript|javascript/",
           "group": "navigation@1"
         }
+      ],
+      "debug/toolbar": [
+        {
+          "command": "explain.autoWalk",
+          "when": "debugType == explain && debugState == stopped",
+          "group": "navigation@0"
+        }
       ]
     },
     "keybindings": [
@@ -40,6 +53,12 @@
         "key": "ctrl+alt+e",
         "mac": "cmd+alt+e",
         "when": "editorTextFocus && !inDebugMode"
+      },
+      {
+        "command": "explain.autoWalk",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
+        "when": "debugType == explain && debugState == stopped"
       }
     ],
     "breakpoints": [

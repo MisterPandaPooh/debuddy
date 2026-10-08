@@ -38,6 +38,7 @@ const tick = () => new Promise((r) => setTimeout(r, 50));
   send('continue', { threadId: 1 });
   await tick();
   if (process.env.EXPLAIN_AUTO === '1') { await tick(); await tick(); send('pause', { threadId: 1 }); await tick(); }
+  if (process.env.EXPLAIN_AUTO === '2') { send('autoWalk', {}); await tick(); await tick(); send('pause', { threadId: 1 }); await tick(); }
   send('stackTrace', { threadId: 1 });
   send('scopes', { frameId: 0 });
   send('variables', { variablesReference: 2 });

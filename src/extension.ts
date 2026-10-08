@@ -36,6 +36,11 @@ export function activate(context: vscode.ExtensionContext) {
       },
       vscode.DebugConfigurationProviderTriggerKind.Dynamic,
     ),
+    vscode.commands.registerCommand('explain.autoWalk', () =>
+      vscode.debug.activeDebugSession?.type === 'explain'
+        ? vscode.debug.activeDebugSession.customRequest('autoWalk')
+        : vscode.window.showInformationMessage('Start Explain Mode first (Cmd+Alt+E), then auto-walk.'),
+    ),
     vscode.commands.registerCommand('explain.startHere', () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) return;

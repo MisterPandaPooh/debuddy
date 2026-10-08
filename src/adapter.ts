@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import {
+  ContinuedEvent,
   DebugSession,
   InitializedEvent,
   InvalidatedEvent,
@@ -236,6 +237,15 @@ export class ExplainSession extends DebugSession {
     this.log(`branch: ${choice.label} (skipping ${step.branches.filter((b) => b !== choice).map((b) => b.label).join(', ') || 'nothing'})`);
   }
 
+  /** `autoWalk` is sent by the toolbar button / command; VS Code is told the thread now runs. */
+  protected customRequest(command: string, response: DebugProtocol.Response, args: unknown): void {
+    if (command !== 'autoWalk') return super.customRequest(command, response, args);
+    this.sendResponse(response);
+    if (this.auto) return;
+    this.sendEvent(new ContinuedEvent(THREAD_ID));
+    void this.autoWalk();
+  }
+
   protected pauseRequest(response: DebugProtocol.PauseResponse): void {
     this.sendResponse(response);
     if (!this.cancelAuto()) return;
@@ -281,7 +291,8 @@ export class ExplainSession extends DebugSession {
       this.history.push({ stack: [...this.stack], indices: this.stack.map((f) => f.index), reason: 'auto' });
       const frame = this.top;
       const step = frame.steps[frame.index];
-      this.log(`auto ${frame.name}() L${step.line}: ${step.text.split('\n')[0]}`);
+      const bps = [...(this.breakpoints.get(frame.uri.fsPath) ?? [])];
+      this.log(`auto ${frame.name}() L${step.line}: ${step.text.split('\n')[0]}  (bps in file: ${bps.join(', ') || 'none'})`);
       await this.ui.highlight(frame.uri, step.line);
       await this.present('auto', entered);
       if (run.cancelled) return;
