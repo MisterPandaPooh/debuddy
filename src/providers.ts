@@ -4,6 +4,8 @@ import * as vscode from 'vscode';
 /** One chat completion. Every provider reduces to this; the prompts live in explain.ts. */
 export interface ChatProvider {
   readonly name: string;
+  /** Seconds per call rather than milliseconds: callers batch and prefetch more aggressively. */
+  readonly slow?: boolean;
   chat(system: string, user: string, maxTokens: number): Promise<string>;
 }
 
@@ -92,9 +94,9 @@ export class VscodeLmProvider implements ChatProvider {
 // Flags that skip Claude Code's session bootstrap (MCP servers, hooks) — the login still applies.
 const CLAUDE_SLIM = ['--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--no-session-persistence', '--tools', ''];
 
-function run(bin: string, args: string[], stdin?: string): Promise<string> {
+function run(bin: string, args: string[], stdin?: string, cwd?: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd });
     let out = '';
     let err = '';
     child.stdout.on('data', (d) => (out += d));
@@ -108,52 +110,44 @@ function run(bin: string, args: string[], stdin?: string): Promise<string> {
 /** The Claude Code CLI, one process per call: reuses the user's login (subscription or key). ~7–10 s. */
 export class ClaudeCliProvider implements ChatProvider {
   readonly name: string;
-  constructor(private opts: { model?: string; bin?: string }) {
+  readonly slow = true;
+  constructor(private opts: { model?: string; bin?: string; extraArgs?: string[] }) {
     this.name = `claude-cli/${opts.model || 'default'}`;
   }
 
   chat(system: string, user: string): Promise<string> {
-    const args = ['-p', '--output-format', 'text', '--system-prompt', system, ...CLAUDE_SLIM];
+    const args = ['-p', '--output-format', 'text', '--system-prompt', system, ...CLAUDE_SLIM, ...(this.opts.extraArgs ?? [])];
     if (this.opts.model) args.push('--model', this.opts.model);
     return run(this.opts.bin || 'claude', args, user);
   }
 }
 
-/**
- * One long-lived `claude -p --input-format stream-json` process: the bootstrap is paid once,
- * each call is a turn (~3–5 s). Calls are serialized; the process is recycled every N turns so the
- * conversation does not grow without bound, and respawned if it dies.
- */
-export class ClaudeSessionProvider implements ChatProvider {
-  readonly name: string;
+/** A single long-lived `claude -p --input-format stream-json` process; one turn at a time. */
+class ClaudeSession {
   private child?: ReturnType<typeof spawn>;
-  private queue: Promise<unknown> = Promise.resolve();
   private turns = 0;
   private pending?: { resolve: (s: string) => void; reject: (e: Error) => void };
   private buf = '';
+  busy = 0;
 
-  constructor(private opts: { model?: string; bin?: string; maxTurns?: number }) {
-    this.name = `claude-session/${opts.model || 'default'}`;
-  }
+  constructor(private opts: { model?: string; bin?: string; maxTurns?: number; extraArgs?: string[] }) {}
 
-  chat(system: string, user: string): Promise<string> {
-    // Each turn carries its own instructions; the session system prompt only enforces independence.
-    const content = `Instructions for this task:\n${system}\n\n---\n\n${user}`;
-    const next = this.queue.then(() => this.turn(content));
-    this.queue = next.catch(() => undefined);
-    return next;
-  }
-
-  private turn(content: string): Promise<string> {
-    if (!this.child || this.turns >= (this.opts.maxTurns ?? 30)) this.respawn();
-    this.turns++;
-    return new Promise((resolve, reject) => {
-      this.pending = { resolve, reject };
-      const timer = setTimeout(() => this.fail(new Error('claude session: no answer after 120 s')), 120_000);
-      this.pending.resolve = (s) => (clearTimeout(timer), resolve(s));
-      this.pending.reject = (e) => (clearTimeout(timer), reject(e));
-      this.child!.stdin!.write(JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n');
-    });
+  async turn(content: string): Promise<string> {
+    this.busy++;
+    try {
+      if (!this.child || this.turns >= (this.opts.maxTurns ?? 30)) this.respawn();
+      this.turns++;
+      return await new Promise<string>((resolve, reject) => {
+        const timer = setTimeout(() => this.fail(new Error('claude session: no answer after 120 s')), 120_000);
+        this.pending = {
+          resolve: (s) => (clearTimeout(timer), resolve(s)),
+          reject: (e) => (clearTimeout(timer), reject(e)),
+        };
+        this.child!.stdin!.write(JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n');
+      });
+    } finally {
+      this.busy--;
+    }
   }
 
   private respawn() {
@@ -161,7 +155,8 @@ export class ClaudeSessionProvider implements ChatProvider {
     this.turns = 0;
     this.buf = '';
     const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', ...CLAUDE_SLIM,
-      '--system-prompt', 'Each user message is an independent task with its own instructions. Answer only the latest one, follow its format exactly, no preamble.'];
+      '--system-prompt', 'Each user message is an independent task with its own instructions. Answer only the latest one, follow its format exactly, no preamble.',
+      ...(this.opts.extraArgs ?? [])];
     if (this.opts.model) args.push('--model', this.opts.model);
     const child = spawn(this.opts.bin || 'claude', args, { stdio: ['pipe', 'pipe', 'pipe'] });
     this.child = child;
@@ -182,7 +177,7 @@ export class ClaudeSessionProvider implements ChatProvider {
       const line = this.buf.slice(0, i).trim();
       this.buf = this.buf.slice(i + 1);
       if (!line) continue;
-      let msg: { type: string; subtype?: string; result?: string; is_error?: boolean };
+      let msg: { type: string; result?: string; is_error?: boolean };
       try {
         msg = JSON.parse(line);
       } catch {
@@ -208,18 +203,53 @@ export class ClaudeSessionProvider implements ChatProvider {
   }
 }
 
+/**
+ * A pool of persistent Claude sessions: the bootstrap is paid once per session, calls run in
+ * parallel across sessions (least-busy first) and queue within one. ~4–7 s per call.
+ */
+export class ClaudeSessionProvider implements ChatProvider {
+  readonly name: string;
+  readonly slow = true;
+  private sessions: ClaudeSession[];
+  private queues: Promise<unknown>[];
+
+  constructor(opts: { model?: string; bin?: string; maxTurns?: number; extraArgs?: string[]; size?: number }) {
+    this.name = `claude-session/${opts.model || 'default'}`;
+    const size = Math.max(1, opts.size ?? 3);
+    this.sessions = Array.from({ length: size }, () => new ClaudeSession(opts));
+    this.queues = this.sessions.map(() => Promise.resolve());
+  }
+
+  chat(system: string, user: string): Promise<string> {
+    // Each turn carries its own instructions; the session system prompt only enforces independence.
+    const content = `Instructions for this task:\n${system}\n\n---\n\n${user}`;
+    let i = 0;
+    for (let k = 1; k < this.sessions.length; k++) if (this.sessions[k].busy < this.sessions[i].busy) i = k;
+    this.sessions[i].busy++; // reserve before the queue drains so the next caller sees it
+    const next = this.queues[i].then(() => this.sessions[i].turn(content)).finally(() => this.sessions[i].busy--);
+    this.queues[i] = next.catch(() => undefined);
+    return next;
+  }
+
+  dispose() {
+    for (const s of this.sessions) s.dispose();
+  }
+}
+
 /** Cursor's Agent CLI (`agent -p`): reuses the Cursor subscription. Needs `agent login` once. */
 export class CursorCliProvider implements ChatProvider {
   readonly name: string;
-  constructor(private opts: { model?: string; bin?: string }) {
+  readonly slow = true;
+  constructor(private opts: { model?: string; bin?: string; workspace?: string; extraArgs?: string[] }) {
     this.name = `cursor-cli/${opts.model || 'default'}`;
   }
 
   chat(system: string, user: string): Promise<string> {
-    // No system-prompt flag: fold the instructions into the prompt.
-    const args = ['-p', '--output-format', 'text'];
+    // No system-prompt flag: fold the instructions into the prompt. `--trust` skips the workspace prompt.
+    const args = ['-p', '--output-format', 'text', '--trust', ...(this.opts.extraArgs ?? [])];
+    if (this.opts.workspace) args.push('--workspace', this.opts.workspace);
     if (this.opts.model) args.push('--model', this.opts.model);
     args.push(`${system}\n\n---\n\n${user}`);
-    return run(this.opts.bin || 'agent', args);
+    return run(this.opts.bin || 'agent', args, undefined, this.opts.workspace);
   }
 }

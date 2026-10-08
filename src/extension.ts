@@ -14,6 +14,7 @@ export function activate(context: vscode.ExtensionContext) {
     explainer: new PromptExplainer(
       () => registry.current(),
       () => vscode.workspace.getConfiguration('explain').get<boolean>('exampleValues', true),
+      () => vscode.workspace.getConfiguration('explain').get<string>('language', 'English'),
     ),
     tests: new TestIndex(),
   };
@@ -30,8 +31,12 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.debug.onDidChangeActiveDebugSession((s) => setActive(s?.type === 'explain')),
     vscode.debug.onDidTerminateDebugSession(() => setActive(vscode.debug.activeDebugSession?.type === 'explain')),
     vscode.debug.registerDebugAdapterDescriptorFactory('explain', {
-      createDebugAdapterDescriptor: () =>
-        new vscode.DebugAdapterInlineImplementation(new ExplainSession(ui, src)),
+      createDebugAdapterDescriptor: () => {
+        const session = new ExplainSession(ui, src);
+        const sub = vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('explain') && session.invalidate());
+        context.subscriptions.push(sub);
+        return new vscode.DebugAdapterInlineImplementation(session);
+      },
     }),
     // Lets a bare `{ "type": "explain" }` launch config start from the cursor.
     vscode.debug.registerDebugConfigurationProvider('explain', {
@@ -129,7 +134,13 @@ class ProviderRegistry implements vscode.Disposable {
       case 'vscode-lm':
         return new VscodeLmProvider({ vendor: c.get<string>('vscodeLm.vendor') || undefined, family: c.get<string>('vscodeLm.family') || undefined });
       case 'claude-cli': {
-        const opts = { model: c.get<string>('claude.model') || undefined, bin: c.get<string>('claude.bin') || undefined };
+        const effort = c.get<string>('claude.effort', '');
+        const opts = {
+          model: c.get<string>('claude.model') || undefined,
+          bin: c.get<string>('claude.bin') || undefined,
+          extraArgs: [...(effort ? ['--effort', effort] : []), ...c.get<string[]>('claude.extraArgs', [])],
+          size: c.get<number>('claude.sessions', 3),
+        };
         if (!c.get<boolean>('claude.persistentSession', true)) return new ClaudeCliProvider(opts);
         const key = JSON.stringify(opts);
         if (this.session?.key !== key) {
@@ -139,7 +150,12 @@ class ProviderRegistry implements vscode.Disposable {
         return this.session.provider;
       }
       case 'cursor-cli':
-        return new CursorCliProvider({ model: c.get<string>('cursor.model') || undefined, bin: c.get<string>('cursor.bin') || undefined });
+        return new CursorCliProvider({
+          model: c.get<string>('cursor.model') || undefined,
+          bin: c.get<string>('cursor.bin') || undefined,
+          workspace: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+          extraArgs: c.get<string[]>('cursor.extraArgs', []),
+        });
       default:
         return new OllamaProvider({ url: c.get<string>('ollamaUrl', 'http://localhost:11434'), model: c.get<string>('model', 'qwen2.5-coder:3b') });
     }

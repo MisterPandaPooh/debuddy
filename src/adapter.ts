@@ -584,9 +584,10 @@ export class ExplainSession extends DebugSession {
         this.values = v;
         this.sendEvent(new InvalidatedEvent(['variables'], THREAD_ID));
       }).catch((err) => this.log(`values: ${err}`));
-      // Warm the next statement while the user reads this one; local inference is free.
-      const next = this.peekNext();
-      if (next) void this.prepare(next.frame, next.step).catch(() => undefined);
+      // Warm the statements ahead while the user reads this one (explain.prefetch of them).
+      for (const next of this.peekAhead(vscode.workspace.getConfiguration('explain').get<number>('prefetch', 3))) {
+        void this.prepare(next.frame, next.step).catch(() => undefined);
+      }
     } catch (err) {
       if (token === this.explainToken) this.ui.showError(frame.uri, step.line, err);
     }
@@ -610,7 +611,7 @@ export class ExplainSession extends DebugSession {
       p = (async () => {
         const ctx = await buildContext(frame, step, this.src);
         const explanation = await this.src.explainer.explainStatement(ctx);
-        const values = this.src.explainer.exampleValues(ctx);
+        const values = explanation.values ? Promise.resolve(explanation.values) : this.src.explainer.exampleValues(ctx);
         return { ctx, explanation, values };
       })();
       p.catch(() => this.prepared.delete(key));
@@ -621,10 +622,26 @@ export class ExplainSession extends DebugSession {
 
   /** Where Step Over would land, without moving. */
   private peekNext(): { frame: Frame; step: Step } | undefined {
-    for (let i = this.stack.length - 1; i >= 0; i--) {
+    return this.peekAhead(1)[0];
+  }
+
+  /** The next `n` statements along the Step Over path (current frame, then callers), without moving. */
+  private peekAhead(n: number): { frame: Frame; step: Step }[] {
+    const out: { frame: Frame; step: Step }[] = [];
+    for (let i = this.stack.length - 1; i >= 0 && out.length < n; i--) {
       const f = this.stack[i];
-      if (f.index + 1 < f.steps.length) return { frame: f, step: f.steps[f.index + 1] };
+      for (let j = f.index + 1; j < f.steps.length && out.length < n; j++) {
+        const s = f.steps[j];
+        if (f.skip.some((b) => s.line >= b.from && s.line <= b.to)) continue;
+        out.push({ frame: f, step: s });
+      }
     }
-    return undefined;
+    return out;
+  }
+
+  /** Settings changed (provider, context…): what was prepared no longer matches. */
+  invalidate() {
+    this.prepared.clear();
+    this.explainToken++;
   }
 }

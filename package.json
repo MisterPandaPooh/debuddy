@@ -167,6 +167,11 @@
           ],
           "description": "Model used for every step."
         },
+        "explain.language": {
+          "type": "string",
+          "default": "English",
+          "description": "Language of the explanations (e.g. French). Labels stay in English."
+        },
         "explain.ollamaUrl": {
           "type": "string",
           "default": "http://localhost:11434"
@@ -259,6 +264,43 @@
           "type": "boolean",
           "default": true,
           "description": "Ask the model for example values of declared variables (one extra call per statement). Turn off on slow providers."
+        },
+        "explain.prefetch": {
+          "type": "number",
+          "default": 3,
+          "description": "Statements prepared ahead of the current one, along the Step Over path. Raise it (6\u20138) on slow providers."
+        },
+        "explain.claude.sessions": {
+          "type": "number",
+          "default": 3,
+          "description": "Persistent claude processes kept in parallel; more = more prefetch throughput, more memory."
+        },
+        "explain.claude.effort": {
+          "type": "string",
+          "enum": [
+            "",
+            "low",
+            "medium",
+            "high"
+          ],
+          "default": "",
+          "description": "--effort passed to the Claude CLI. Empty = CLI default."
+        },
+        "explain.claude.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra flags for the claude CLI, e.g. [\"--max-budget-usd\", \"1\"]."
+        },
+        "explain.cursor.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra flags for the Cursor agent CLI, e.g. [\"--mode\", \"ask\"]."
         }
       }
     },

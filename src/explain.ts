@@ -30,7 +30,8 @@ export interface StatementContext {
 }
 
 export interface Explainer {
-  explainStatement(ctx: StatementContext): Promise<Explanation>;
+  /** `values` is set when the provider answered both in one call (slow providers). */
+  explainStatement(ctx: StatementContext): Promise<Explanation & { values?: ExampleValue[] }>;
   exampleValues(ctx: StatementContext): Promise<ExampleValue[]>;
   /** `hints` are one-line summaries of the function's own callees ("name: summary"). */
   summarizeFunction(source: string, reason: string, hints?: string[]): Promise<string>;
@@ -60,6 +61,12 @@ Does: Reads the file at path and parses it as JSON, or returns DEFAULTS when emp
 Why: Loads the settings the rest of the function relies on.
 Watch: Falls back to DEFAULTS silently; JSON.parse can throw on bad input.`;
 
+const COMBINED_VALUES_RULE = `
+
+Then, after "Watch", add a section:
+Values:
+<one line per declared variable: name = tiny example conforming to its type | alternative when null/undefined/fallback is possible>`;
+
 const VALUES_SYSTEM = `You invent ONE plausible example value for each variable a statement assigns, for a developer reading code.
 Rules:
 - The example uses ONLY the fields listed in the type, and is never empty when the type allows content.
@@ -82,11 +89,20 @@ export class PromptExplainer implements Explainer {
   private summaries = new Map<string, Promise<string>>();
 
   /** The provider is resolved per call, so a settings change applies to the next step. */
-  constructor(private provider: () => ChatProvider, private wantValues: () => boolean = () => true) {}
+  constructor(
+    private provider: () => ChatProvider,
+    private wantValues: () => boolean = () => true,
+    private language: () => string = () => 'English',
+  ) {}
 
-  async explainStatement(ctx: StatementContext): Promise<Explanation> {
-    const text = await this.chat(EXPLAIN_SYSTEM, contextPrompt(ctx), 100);
-    return parseExplanation(text);
+  async explainStatement(ctx: StatementContext): Promise<Explanation & { values?: ExampleValue[] }> {
+    const combined = this.provider().slow && this.wantValues() && ctx.vars.length > 0;
+    if (!combined) return parseExplanation(await this.chat(EXPLAIN_SYSTEM, contextPrompt(ctx), 100));
+    // One round-trip instead of two: the values section is appended to the same answer.
+    const prompt = `${contextPrompt(ctx)}\n\nVariables declared here (type after the colon):\n${ctx.vars.join('\n')}`;
+    const text = await this.chat(EXPLAIN_SYSTEM + COMBINED_VALUES_RULE, prompt, 200);
+    const [head, tail = ''] = text.split(/^Values:\s*$/m);
+    return { ...parseExplanation(head), values: parseValues(tail, ctx.vars.map((v) => v.split(':')[0].trim())) };
   }
 
   async exampleValues(ctx: StatementContext): Promise<ExampleValue[]> {
@@ -97,7 +113,7 @@ export class PromptExplainer implements Explainer {
   }
 
   summarizeFunction(source: string, reason: string, hints: string[] = []): Promise<string> {
-    const key = source + '\n' + hints.join('\n'); // cache by exact text; a change invalidates naturally
+    const key = this.provider().name + '\n' + source + '\n' + hints.join('\n'); // per provider and exact text
     let p = this.summaries.get(key);
     if (!p) {
       const known = hints.length ? `Known functions:\n${hints.join('\n')}\n\n` : '';
@@ -117,7 +133,8 @@ ${known}${source}`;
   }
 
   private chat(system: string, user: string, maxTokens: number): Promise<string> {
-    return this.provider().chat(system, user, maxTokens);
+    // Pinned explicitly: CLI providers inherit the user's own assistant preferences otherwise.
+    return this.provider().chat(`${system}\n\nWrite the prose in ${this.language()}; keep the labels (Does/Why/Watch/Values) as they are.`, user, maxTokens);
   }
 }
 
