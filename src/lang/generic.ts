@@ -10,6 +10,19 @@ import { Branch, CallSite, Frame, LanguageSupport, Step } from './types';
 export const genericLanguage: LanguageSupport = {
   languages: ['*'],
   frameAt: genericFrameAt,
+  findFunction(doc, name) {
+    const want = name.split(/\.|::|->/).pop()!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`^[ \\t]*(?:[\\w<>\\[\\],?:]+\\s+)*(?:def|fn|func|function|fun|sub)?\\s*(${want})\\s*(?:<[^>]*>)?\\s*\\(`);
+    for (let l = 0; l < doc.lineCount; l++) {
+      const text = doc.lineAt(l).text;
+      const m = text.match(re);
+      if (m && !/^\s*(if|while|for|switch|return|else)\b/.test(text) && /[{:=]\s*$|\)\s*(->|:|\{)?\s*$/.test(text)) {
+        const col = m.index! + m[0].lastIndexOf(m[1]);
+        return new vscode.Location(doc.uri, new vscode.Range(new vscode.Position(l, col), new vscode.Position(l, col + m[1].length)));
+      }
+    }
+    return undefined;
+  },
 };
 
 export function keywordProfileFor(languageId: string): KeywordProfile {

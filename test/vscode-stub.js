@@ -38,7 +38,7 @@ function openTextDocument(p) {
 }
 
 module.exports = {
-  Position, Range, Uri, Location: class {},
+  Position, Range, Uri, Location: class { constructor(uri, range) { this.uri = uri; this.range = range; } },
   SymbolKind: { Function: 11, Method: 5, Constructor: 8 },
   ProgressLocation: { Notification: 15 },
   commands: { executeCommand: async () => [] },

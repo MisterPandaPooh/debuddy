@@ -56,4 +56,6 @@ export interface LanguageSupport {
   readonly languages: string[];
   /** Build the frame for the function containing `line` (1-based); `undefined` if none. */
   frameAt(doc: vscode.TextDocument, line: number, reason?: string): Frame | undefined | Promise<Frame | undefined>;
+  /** Where a function named `name` is declared in `doc`, when no language server answers. */
+  findFunction?(doc: vscode.TextDocument, name: string): vscode.Location | undefined | Promise<vscode.Location | undefined>;
 }

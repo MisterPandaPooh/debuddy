@@ -40,7 +40,7 @@ const tick = () => new Promise((r) => setTimeout(r, 50));
   send('configurationDone');
   await tick();
   if (SCENARIO === 'throw') { send('followThrow', {}); await tick(); send('stackTrace', { threadId: 1 }); return; }
-  if (SCENARIO === 'next') { send('next', { threadId: 1 }); await tick(); send('stackTrace', { threadId: 1 }); return; }
+  if (SCENARIO === 'next') { send('next', { threadId: 1 }); await tick(); send('next', { threadId: 1 }); await tick(); send('stackTrace', { threadId: 1 }); return; }
   send('continue', { threadId: 1 });
   await tick();
   if (process.env.EXPLAIN_AUTO === '1') { await tick(); await tick(); send('pause', { threadId: 1 }); await tick(); }

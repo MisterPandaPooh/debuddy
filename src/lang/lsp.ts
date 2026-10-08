@@ -3,8 +3,8 @@ import { CallSite } from './types';
 
 // Language-agnostic lookups through whatever language server is active in VS Code.
 
-/** Resolve a call to a definition inside the workspace (never node_modules). */
-export async function resolveProjectCallee(
+/** Resolve a call to a definition inside the workspace (never node_modules), through the language server. */
+export async function lspProjectCallee(
   uri: vscode.Uri,
   call: CallSite,
 ): Promise<vscode.Location | undefined> {

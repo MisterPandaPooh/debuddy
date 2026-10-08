@@ -7,8 +7,49 @@ import { setGrammarDir, treeSitterLanguage } from './treesitter';
 import { Frame, LanguageSupport } from './types';
 import { typescriptLanguage } from './typescript';
 
+import { lspProjectCallee } from './lsp';
+import { CallSite } from './types';
+
 export * from './lsp';
 export * from './types';
+
+const EXT: Record<string, string[]> = { python: ['py'], rust: ['rs'], go: ['go'], java: ['java'], kotlin: ['kt'], csharp: ['cs'], cpp: ['cpp', 'cc', 'hpp', 'h'], c: ['c', 'h'], swift: ['swift'], php: ['php'], ruby: ['rb'], typescript: ['ts', 'tsx'], javascript: ['js', 'jsx', 'mjs'] };
+const fallbackCache = new Map<string, Promise<vscode.Location | undefined>>();
+
+/**
+ * Where a call is defined: the language server first; without one, the walker looks for a
+ * function of that name in the same file, then in the workspace files of the same language.
+ */
+export async function resolveProjectCallee(uri: vscode.Uri, call: CallSite): Promise<vscode.Location | undefined> {
+  const viaLsp = await lspProjectCallee(uri, call);
+  if (viaLsp) return viaLsp;
+  const doc = await vscode.workspace.openTextDocument(uri);
+  const lang = languageFor(doc);
+  if (!lang.findFunction) return undefined;
+  const local = await lang.findFunction(doc, call.name);
+  if (local) return local;
+  const key = `${doc.languageId}:${call.name}`;
+  let p = fallbackCache.get(key);
+  if (!p) {
+    p = (async () => {
+      const exts = EXT[doc.languageId] ?? [];
+      if (!exts.length) return undefined;
+      const files = await vscode.workspace.findFiles(`**/*.{${exts.join(',')}}`, '{**/node_modules/**,**/target/**,**/.venv/**,**/dist/**}', 200);
+      const want = call.name.split(/\.|::|->/).pop()!;
+      for (const f of files) {
+        if (f.fsPath === uri.fsPath) continue;
+        const other = await vscode.workspace.openTextDocument(f);
+        if (!other.getText().includes(want)) continue;
+        const loc = await lang.findFunction!(other, call.name);
+        if (loc) return loc;
+      }
+      return undefined;
+    })();
+    fallbackCache.set(key, p);
+    setTimeout(() => fallbackCache.delete(key), 30_000).unref?.();
+  }
+  return p;
+}
 
 /**
  * Exact walkers first (TypeScript compiler, tree-sitter grammars), then the LSP-generic one for

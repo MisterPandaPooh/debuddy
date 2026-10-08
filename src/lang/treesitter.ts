@@ -88,6 +88,30 @@ export function treeSitterLanguage(profile: TreeSitterProfile): LanguageSupport 
         parser.delete();
       }
     },
+    async findFunction(doc, name) {
+      const ts = await runtime();
+      const lang = await grammar(profile.grammar);
+      const parser: ParserType = new ts.Parser();
+      parser.setLanguage(lang);
+      const tree = parser.parse(doc.getText());
+      try {
+        if (!tree) return undefined;
+        const want = name.split(/\.|::/).pop();
+        let found: Node | undefined;
+        const visit = (n: Node) => {
+          if (found) return;
+          if (profile.functionTypes.includes(n.type) && n.childForFieldName('name')?.text === want) found = n;
+          else for (const c of n.namedChildren) visit(c);
+        };
+        visit(tree.rootNode);
+        if (!found) return undefined;
+        const id = found.childForFieldName('name')!;
+        return new vscode.Location(doc.uri, new vscode.Range(doc.positionAt(id.startIndex), doc.positionAt(id.endIndex)));
+      } finally {
+        tree?.delete();
+        parser.delete();
+      }
+    },
   };
 }
 

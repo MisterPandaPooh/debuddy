@@ -194,7 +194,26 @@ function frameAt(doc: vscode.TextDocument, line: number, reason = ''): Frame | u
   };
 }
 
+/** A function declared or assigned under `name` anywhere in the file (no server needed). */
+function findFunction(doc: vscode.TextDocument, name: string): vscode.Location | undefined {
+  const want = name.split('.').pop();
+  const sf = parse(doc);
+  let found: ts.Node | undefined;
+  const visit = (n: ts.Node) => {
+    if (found) return;
+    if (isFnWithBody(n) && fnName(n) === want) {
+      found = n.name ?? (ts.isVariableDeclaration(n.parent) ? n.parent.name : ts.isPropertyAssignment(n.parent) ? n.parent.name : n);
+      return;
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  if (!found) return undefined;
+  return new vscode.Location(doc.uri, new vscode.Range(doc.positionAt(found.getStart()), doc.positionAt(found.getEnd())));
+}
+
 export const typescriptLanguage: LanguageSupport = {
   languages: ['typescript', 'javascript', 'typescriptreact', 'javascriptreact'],
   frameAt,
+  findFunction,
 };

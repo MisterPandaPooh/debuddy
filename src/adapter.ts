@@ -232,7 +232,19 @@ export class ExplainSession extends DebugSession {
   protected async nextRequest(response: DebugProtocol.NextResponse) {
     this.sendResponse(response);
     // A `throw` statement always throws: the next step is wherever the exception lands.
-    if (this.top.steps[this.top.index].throwsSelf) return this.followThrow();
+    const cur = this.top.steps[this.top.index];
+    if (cur.throwsSelf) {
+      if (this.uncaughtAt === `${this.top.uri.fsPath}:${cur.line}`) {
+        // Already shown as uncaught: the function exits with the error.
+        this.uncaughtAt = undefined;
+        if (this.stack.length > 1) {
+          this.stack.pop();
+          return this.moveNext() ? void this.stopAt('step') : this.end();
+        }
+        return this.end();
+      }
+      return this.followThrow();
+    }
     await this.askBranch();
     this.moveNext() ? void this.stopAt('step') : this.end();
   }
@@ -296,8 +308,9 @@ export class ExplainSession extends DebugSession {
         }
       }
       if (this.stack.length === 1) {
-        // No handler anywhere: stay put and say so.
-        this.pendingHeader = `💥 **${what}** is not caught${unwound.length ? ` in ${unwound.join(' → ')} nor` : ''} here — it leaves ${frame.name}() to its caller`;
+        // No handler anywhere: stay put and say so; the next Step Over leaves the function.
+        this.pendingHeader = `💥 **${what}** is not caught${unwound.length ? ` in ${unwound.join(' → ')} nor` : ''} here — it leaves ${frame.name}() to its caller. _F10 ends the walk._`;
+        if (step.throwsSelf) this.uncaughtAt = `${frame.uri.fsPath}:${step.line}`;
         this.log(`throw: ${what} unhandled, leaves ${frame.name}()`);
         return false;
       }
@@ -536,6 +549,8 @@ export class ExplainSession extends DebugSession {
 
   /** One-shot header for the next presentation (set by followThrow). */
   private pendingHeader?: string;
+  /** Statement whose uncaught throw was already shown: the next Step Over leaves the function. */
+  private uncaughtAt?: string;
 
 
   /** Explain the current statement and refresh the UI; shared by stops and auto mode. */
