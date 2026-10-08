@@ -54,6 +54,15 @@ export function activate(context: vscode.ExtensionContext) {
         void vscode.window.showErrorMessage(`Auto-walk failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }),
+    vscode.commands.registerCommand('explain.followThrow', async () => {
+      const session = vscode.debug.activeDebugSession;
+      if (session?.type !== 'explain') return;
+      try {
+        await session.customRequest('followThrow');
+      } catch (err) {
+        void vscode.window.showErrorMessage(`Follow throw failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }),
     vscode.commands.registerCommand('explain.startHere', () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) return;

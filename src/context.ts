@@ -11,6 +11,22 @@ export interface ContextSources {
   tests: TestIndex;
 }
 
+/** Errors a statement can raise: its own `throw` plus the throw sites of its project callees. No LLM. */
+export async function stepThrows(frame: Frame, step: Step): Promise<string[]> {
+  const out: string[] = [];
+  if (step.throwsSelf) out.push(step.throwsSelf);
+  if (step.mayThrow) out.push(`${step.mayThrow} (conditional)`);
+  for (const call of step.calls) {
+    if (STDLIB.test(call.name)) continue;
+    const loc = await resolveProjectCallee(frame.uri, call);
+    if (!loc) continue;
+    const target = await vscode.workspace.openTextDocument(loc.uri);
+    const callee = frameAt(target, loc.range.start.line + 1);
+    if (callee) out.push(...callee.throws.map((t) => `${t} (from ${call.name})`));
+  }
+  return out;
+}
+
 /**
  * Build the minimal context for one statement: only resolve what is opaque.
  * Explicit lines get the enclosing function and nothing else.
@@ -18,7 +34,7 @@ export interface ContextSources {
 export async function buildContext(frame: Frame, step: Step, src: ContextSources): Promise<StatementContext> {
   const callees: string[] = [];
   const hovers: string[] = [];
-  const throws: string[] = [];
+  const throws = await stepThrows(frame, step);
 
   for (const call of step.calls) {
     if (STDLIB.test(call.name)) continue;
@@ -30,7 +46,6 @@ export async function buildContext(frame: Frame, step: Step, src: ContextSources
       if (callee) {
         const summary = await summarizeFrame(callee, src, definitionDepth() - 1);
         callees.push(`${call.name}: ${summary}`);
-        throws.push(...callee.throws.map((t) => `${t} (from ${call.name})`));
         continue;
       }
     }

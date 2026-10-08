@@ -7,6 +7,8 @@ export interface ShowOptions {
   footer?: string;
   /** Deterministic: errors the statement's callees can throw. Shown even if the model missed them. */
   throws?: string[];
+  /** Deterministic: where a throw from this statement lands. */
+  lands?: string;
 }
 
 /** Shows the explanation as a collapsible comment thread right under the current statement. */
@@ -39,7 +41,7 @@ export class ExplainUi implements vscode.Disposable {
       `**Does** ${e.does}`,
       `**Why** ${e.why}`,
       e.watch ? `**Watch** ⚠️ ${e.watch}` : undefined,
-      opts.throws?.length ? `**Throws** 🔥 ${opts.throws.join(', ')}` : undefined,
+      opts.throws?.length ? `**Throws** 🔥 ${opts.throws.join(', ')}${opts.lands ? ` — ${opts.lands}` : ''}` : undefined,
       opts.footer,
     ]
       .filter(Boolean)

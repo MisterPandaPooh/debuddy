@@ -29,6 +29,12 @@
         "title": "Explain Mode: Auto-walk",
         "category": "Explain",
         "icon": "$(run-all)"
+      },
+      {
+        "command": "explain.followThrow",
+        "title": "Explain Mode: Follow the exception",
+        "category": "Explain",
+        "icon": "$(flame)"
       }
     ],
     "menus": {
@@ -44,6 +50,11 @@
           "command": "explain.autoWalk",
           "when": "explain.active",
           "group": "navigation@0"
+        },
+        {
+          "command": "explain.followThrow",
+          "when": "explain.active && explain.canThrow",
+          "group": "navigation@1"
         }
       ],
       "debug/toolBar": [
@@ -51,6 +62,11 @@
           "command": "explain.autoWalk",
           "when": "explain.active",
           "group": "navigation@0"
+        },
+        {
+          "command": "explain.followThrow",
+          "when": "explain.active && explain.canThrow",
+          "group": "navigation@1"
         }
       ]
     },
@@ -66,6 +82,12 @@
         "key": "ctrl+alt+a",
         "mac": "cmd+alt+a",
         "when": "explain.active"
+      },
+      {
+        "command": "explain.followThrow",
+        "key": "ctrl+alt+x",
+        "mac": "cmd+alt+x",
+        "when": "explain.active && explain.canThrow"
       }
     ],
     "breakpoints": [
@@ -166,8 +188,9 @@
     "watch": "npm run build -- --watch",
     "typecheck": "tsc --noEmit",
     "bench": "node bench/bench.mjs",
-    "test:dap": "esbuild src/adapter.ts --bundle --platform=node --format=cjs --outfile=test/adapter.bundle.js --alias:vscode=./test/vscode-stub.js && node test/dap.js sample/user.service.ts 11 13",
-    "test:dap:auto": "EXPLAIN_AUTO=1 npm run test:dap"
+    "test:dap": "esbuild src/adapter.ts --bundle --platform=node --format=cjs --outfile=test/adapter.bundle.js --alias:vscode=./test/vscode-stub.js && node test/dap.js",
+    "test:dap:auto": "EXPLAIN_AUTO=1 npm run test:dap",
+    "test:dap:throw": "npm run test:dap >/dev/null && EXPLAIN_SCENARIO=throw node test/dap.js test/fixtures/throwflow.ts 3 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 13 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 10"
   },
   "devDependencies": {
     "@types/node": "^22",

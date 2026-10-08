@@ -12,6 +12,12 @@ export interface Step {
   declared: { name: string; position: vscode.Position }[];
   /** For `if` heads: the line ranges of each branch body, so the user can pick a path. */
   branches?: Branch[];
+  /** The `catch` step that would receive an exception thrown here, if the step is inside a `try`. */
+  handler?: { line: number; text: string };
+  /** For `throw` statements: the error being thrown. Certain, so stepping follows it. */
+  throwsSelf?: string;
+  /** A `throw` nested in a one-line statement (`if (x) throw …`). Possible, not certain. */
+  mayThrow?: string;
 }
 
 export interface Branch {
@@ -79,16 +85,23 @@ function collectSteps(sf: ts.SourceFile, body: ts.Node, doc: vscode.TextDocument
   const steps: Step[] = [];
   const lineOf = (pos: number) => doc.positionAt(pos).line + 1;
   // Keyword-only steps (`try`, `catch (e)`, `finally`) make no calls; their blocks are walked separately.
+  // Innermost enclosing `catch` while walking a try block, so steps know where a throw lands.
+  const handlers: { line: number; text: string }[] = [];
   const push = (start: number, end: number, text: string) =>
-    steps.push({ line: lineOf(start), endLine: lineOf(end), text, calls: [], declared: [] });
+    steps.push({ line: lineOf(start), endLine: lineOf(end), text, calls: [], declared: [], handler: handlers.at(-1) });
   const visit = (n: ts.Node) => {
     if (ts.isFunctionLike(n)) return;
     if (ts.isTryStatement(n)) {
       // `try` / `catch (e)` / `finally` each get a step; their blocks are walked normally.
+      const catchText = n.catchClause
+        ? n.catchClause.getText().slice(0, n.catchClause.block.getStart() - n.catchClause.getStart()).trim()
+        : undefined;
       push(n.getStart(), n.tryBlock.getStart(), 'try');
+      if (n.catchClause && catchText) handlers.push({ line: lineOf(n.catchClause.getStart()), text: catchText });
       ts.forEachChild(n.tryBlock, visit);
-      if (n.catchClause) {
-        push(n.catchClause.getStart(), n.catchClause.block.getStart(), n.catchClause.getText().slice(0, n.catchClause.block.getStart() - n.catchClause.getStart()).trim());
+      if (n.catchClause && catchText) {
+        handlers.pop();
+        push(n.catchClause.getStart(), n.catchClause.block.getStart(), catchText);
         ts.forEachChild(n.catchClause.block, visit);
       }
       if (n.finallyBlock) {
@@ -119,6 +132,9 @@ function collectSteps(sf: ts.SourceFile, body: ts.Node, doc: vscode.TextDocument
         calls: collectCalls(head, doc),
         declared: collectDeclared(n, doc),
         branches,
+        handler: handlers.at(-1),
+        throwsSelf: ts.isThrowStatement(n) ? thrownName(n) : undefined,
+        mayThrow: head === n && !ts.isThrowStatement(n) ? nestedThrow(n) : undefined,
       });
       if (head === n) return;
     }
@@ -154,16 +170,30 @@ function collectCalls(n: ts.Node, doc: vscode.TextDocument) {
   return calls;
 }
 
+function thrownName(n: ts.ThrowStatement): string {
+  const e = n.expression;
+  const id = ts.isNewExpression(e) || ts.isCallExpression(e) ? e.expression : e;
+  return ts.isIdentifier(id) ? id.text : ts.isPropertyAccessExpression(id) ? id.name.text : 'error';
+}
+
+/** First `throw` nested in a statement (e.g. a one-line `if`), excluding nested functions. */
+function nestedThrow(n: ts.Node): string | undefined {
+  let found: string | undefined;
+  const visit = (c: ts.Node) => {
+    if (found || ts.isFunctionLike(c)) return;
+    if (ts.isThrowStatement(c)) found = thrownName(c);
+    else ts.forEachChild(c, visit);
+  };
+  ts.forEachChild(n, visit);
+  return found;
+}
+
 /** `throw new X()` / `throw X` sites in a function body, excluding nested functions. */
 function collectThrows(body: ts.Node): string[] {
   const out = new Set<string>();
   const visit = (n: ts.Node) => {
     if (ts.isFunctionLike(n)) return;
-    if (ts.isThrowStatement(n)) {
-      const e = n.expression;
-      const id = ts.isNewExpression(e) || ts.isCallExpression(e) ? e.expression : e;
-      out.add(ts.isIdentifier(id) ? id.text : ts.isPropertyAccessExpression(id) ? id.name.text : 'error');
-    }
+    if (ts.isThrowStatement(n)) out.add(thrownName(n));
     ts.forEachChild(n, visit);
   };
   visit(body);

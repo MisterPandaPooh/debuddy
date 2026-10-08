@@ -1,7 +1,10 @@
 // Headless DAP harness: replays initialize → launch → setBreakpoints → continue against ExplainSession.
 // Usage: node dap.js <file> <entryLine> <bpLine>
 const fs = require('fs');
-const [, , file, entryLine, bpLine] = process.argv;
+const [, , fileArg, entryArg, bpArg] = process.argv;
+const file = require('path').resolve(fileArg ?? 'sample/user.service.ts');
+const entryLine = entryArg ?? '11', bpLine = bpArg ?? '13';
+const SCENARIO = process.env.EXPLAIN_SCENARIO ?? (process.env.EXPLAIN_AUTO === '1' ? 'auto-f5' : process.env.EXPLAIN_AUTO === '2' ? 'auto-button' : 'continue');
 const { ExplainSession } = require('./adapter.bundle.js');
 
 const explainer = {
@@ -35,10 +38,13 @@ const tick = () => new Promise((r) => setTimeout(r, 50));
   send('setBreakpoints', { source: { name: 'x', path: file }, breakpoints: [{ line: Number(bpLine) }] });
   send('configurationDone');
   await tick();
+  if (SCENARIO === 'throw') { send('followThrow', {}); await tick(); send('stackTrace', { threadId: 1 }); return; }
+  if (SCENARIO === 'next') { send('next', { threadId: 1 }); await tick(); send('stackTrace', { threadId: 1 }); return; }
   send('continue', { threadId: 1 });
   await tick();
   if (process.env.EXPLAIN_AUTO === '1') { await tick(); await tick(); send('pause', { threadId: 1 }); await tick(); }
   if (process.env.EXPLAIN_AUTO === '2') { send('autoWalk', {}); await tick(); await tick(); send('pause', { threadId: 1 }); await tick(); }
+
   send('stackTrace', { threadId: 1 });
   send('scopes', { frameId: 0 });
   send('variables', { variablesReference: 2 });

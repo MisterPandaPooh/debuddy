@@ -13,7 +13,7 @@ import {
   Thread,
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
-import { ContextSources, buildContext, summarizeFrame } from './context';
+import { ContextSources, buildContext, stepThrows, summarizeFrame } from './context';
 import { ExampleValue, Explanation, StatementContext } from './explain';
 import { Frame, Step, frameAt, hoverText, referencesOf, resolveProjectCallee } from './navigator';
 import { ExplainUi } from './ui';
@@ -50,6 +50,10 @@ export class ExplainSession extends DebugSession {
   private prepared = new Map<string, Promise<Prepared>>();
   /** The running auto-walk, if any; cancelled by Pause, breakpoints, end or disconnect. */
   private auto?: { cancelled: boolean; wake: () => void };
+  /** Exception breakpoint filters chosen in the Breakpoints view. */
+  private exceptionFilters = new Set<string>();
+  /** What the current statement can throw (deterministic), for the 💥 button and the UI. */
+  private currentThrows: string[] = [];
 
   constructor(private ui: ExplainUi, private src: ContextSources) {
     super();
@@ -72,6 +76,10 @@ export class ExplainSession extends DebugSession {
       supportsStepBack: true,
       supportsEvaluateForHovers: true,
       supportsFunctionBreakpoints: true,
+      exceptionBreakpointFilters: [
+        { filter: 'throw', label: 'Throw statements', description: 'Stop on every `throw`', default: false },
+        { filter: 'mayThrow', label: 'Calls that may throw', description: 'Stop on calls to project functions that contain a throw', default: false },
+      ],
     };
     this.sendResponse(response);
     this.sendEvent(new InitializedEvent());
@@ -222,6 +230,8 @@ export class ExplainSession extends DebugSession {
 
   protected async nextRequest(response: DebugProtocol.NextResponse) {
     this.sendResponse(response);
+    // A `throw` statement always throws: the next step is wherever the exception lands.
+    if (this.top.steps[this.top.index].throwsSelf) return this.followThrow();
     await this.askBranch();
     this.moveNext() ? void this.stopAt('step') : this.end();
   }
@@ -237,8 +247,73 @@ export class ExplainSession extends DebugSession {
     this.log(`branch: ${choice.label} (skipping ${step.branches.filter((b) => b !== choice).map((b) => b.label).join(', ') || 'nothing'})`);
   }
 
-  /** `autoWalk` is sent by the toolbar button / command; VS Code is told the thread now runs. */
+  protected setExceptionBreakPointsRequest(
+    response: DebugProtocol.SetExceptionBreakpointsResponse,
+    args: DebugProtocol.SetExceptionBreakpointsArguments,
+  ): void {
+    this.exceptionFilters = new Set(args.filters);
+    this.log(`exception filters: ${args.filters.join(', ') || 'none'}`);
+    this.sendResponse(response);
+  }
+
+  /** Exception breakpoints: a `throw` statement, or a call whose project callee contains one. */
+  private async atExceptionBreakpoint(): Promise<boolean> {
+    if (!this.exceptionFilters.size) return false;
+    const step = this.top.steps[this.top.index];
+    if (this.exceptionFilters.has('throw') && step.throwsSelf) return true;
+    if (this.exceptionFilters.has('mayThrow') && step.calls.length) {
+      return (await stepThrows(this.top, step)).some((t) => t.includes('(from '));
+    }
+    return false;
+  }
+
+  /**
+   * Follow the exception from the current statement: jump to the enclosing `catch`, or unwind
+   * the call stack to the first caller that has one, or report that it leaves the entry point.
+   */
+  private followThrow() {
+    this.unwindToHandler();
+    void this.stopAt('exception');
+  }
+
+  /** Move to where an exception from the current statement lands; false when nothing catches it. */
+  private unwindToHandler(): boolean {
+    const what = this.currentThrows[0] ?? 'the exception';
+    this.history.push({ stack: [...this.stack], indices: this.stack.map((f) => f.index), reason: 'throw' });
+    const unwound: string[] = [];
+    while (this.stack.length) {
+      const frame = this.top;
+      const step = frame.steps[frame.index];
+      if (step.handler) {
+        const target = frame.steps.findIndex((s) => s.line === step.handler!.line && s.text === step.handler!.text);
+        if (target >= 0) {
+          frame.index = target;
+          const via = unwound.length ? ` after leaving ${unwound.join(' → ')}` : '';
+          this.pendingHeader = `💥 **${what}** thrown at L${step.line}${via} — caught here`;
+          this.log(`throw: ${what} → ${step.handler.text} L${step.handler.line}`);
+          return true;
+        }
+      }
+      if (this.stack.length === 1) {
+        // No handler anywhere: stay put and say so.
+        this.pendingHeader = `💥 **${what}** is not caught${unwound.length ? ` in ${unwound.join(' → ')} nor` : ''} here — it leaves ${frame.name}() to its caller`;
+        this.log(`throw: ${what} unhandled, leaves ${frame.name}()`);
+        return false;
+      }
+      unwound.push(`${frame.name}()`);
+      this.stack.pop();
+    }
+    return false;
+  }
+
+  /** `autoWalk` / `followThrow` are sent by the toolbar buttons; VS Code is told when the thread runs. */
   protected customRequest(command: string, response: DebugProtocol.Response, args: unknown): void {
+    if (command === 'followThrow') {
+      this.sendResponse(response);
+      this.cancelAuto();
+      if (this.stack.length) void this.followThrow();
+      return;
+    }
     if (command !== 'autoWalk') return super.customRequest(command, response, args);
     this.sendResponse(response);
     this.log(`autoWalk requested (auto already running: ${!!this.auto}, stack: ${this.stack.length})`);
@@ -290,6 +365,12 @@ export class ExplainSession extends DebugSession {
           return void this.stopAt(this.atBreakpoint() ? 'breakpoint' : 'function breakpoint', true);
         }
         entered = true;
+      } else if (this.top.steps[this.top.index].throwsSelf) {
+        // Auto-walk follows a certain throw instead of reading unreachable code.
+        if (!this.unwindToHandler()) {
+          this.cancelAuto();
+          return void this.stopAt('exception');
+        }
       } else {
         if (this.atLastStep()) {
           this.cancelAuto();
@@ -299,6 +380,10 @@ export class ExplainSession extends DebugSession {
         if (this.atBreakpoint()) {
           this.cancelAuto();
           return void this.stopAt('breakpoint');
+        }
+        if (await this.atExceptionBreakpoint()) {
+          this.cancelAuto();
+          return void this.stopAt('exception');
         }
       }
       if (run.cancelled) return;
@@ -361,6 +446,7 @@ export class ExplainSession extends DebugSession {
       if (this.atLastStep()) break;
       this.moveNext();
       if (this.atBreakpoint()) return void this.stopAt('breakpoint');
+      if (await this.atExceptionBreakpoint()) return void this.stopAt('exception');
     }
     // No breakpoint ahead: park on the last statement instead of vanishing silently.
     if (this.stack.length && !wasAtEnd) return void this.stopAt('end');
@@ -447,6 +533,9 @@ export class ExplainSession extends DebugSession {
     await this.present(reason, entered);
   }
 
+  /** One-shot header for the next presentation (set by followThrow). */
+  private pendingHeader?: string;
+
   /** Explain the current statement and refresh the UI; shared by stops and auto mode. */
   private async present(reason: string, entered: boolean) {
     const frame = this.top;
@@ -455,8 +544,19 @@ export class ExplainSession extends DebugSession {
     this.explanation = undefined;
     this.values = [];
     this.context = undefined;
+    this.currentThrows = await stepThrows(frame, step);
+    void vscode.commands.executeCommand('setContext', 'explain.canThrow', this.currentThrows.length > 0);
+    const lands = this.currentThrows.length
+      ? step.handler
+        ? `caught by \`${step.handler.text}\` L${step.handler.line}`
+        : `propagates out of ${frame.name}()${this.stack.length > 1 ? ` to ${this.stack[this.stack.length - 2].name}()` : ' (unhandled here)'}`
+      : undefined;
     try {
       let header = entered ? await this.frameHeader(frame) : undefined;
+      if (this.pendingHeader) {
+        header = [this.pendingHeader, header].filter(Boolean).join('\n\n');
+        this.pendingHeader = undefined;
+      }
       if (this.firstStop) {
         header = [BANNER, header].filter(Boolean).join('\n\n');
         this.firstStop = false;
@@ -475,7 +575,7 @@ export class ExplainSession extends DebugSession {
             : step.branches
               ? '_F10 will ask which branch to follow._'
               : undefined;
-      this.ui.show(frame.uri, step.line, explanation, { header, footer, throws: ctx.throws });
+      this.ui.show(frame.uri, step.line, explanation, { header, footer, throws: ctx.throws, lands });
       this.sendEvent(new InvalidatedEvent(['variables'], THREAD_ID));
       // Values are a second local call; let them land after the explanation without blocking it.
       void values.then((v) => {
