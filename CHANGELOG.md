@@ -1,5 +1,13 @@
 # Changelog — DeBuddy
 
+## 0.1.1 — 2026-10-09
+
+- The provider warms up when a session starts (status bar: "loading model…"), overlapping with
+  the first explanation; `explain.preload` loads it as soon as a supported file opens (off by default).
+- Cursor CLI found automatically (`agent` or `cursor-agent`, PATH or `~/.local/bin`).
+- The ▶▶ auto-walk button and shortcut disappear while the auto-walk runs.
+- README: real screenshots, keycaps, logo; publishing through Microsoft Entra ID (no PAT).
+
 ## 0.1.0 — 2026-10-09
 
 First public release.

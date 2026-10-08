@@ -393,6 +393,7 @@ export class ExplainSession extends DebugSession {
     this.auto.wake();
     this.auto = undefined;
     this.ui.setAutoStatus(false);
+    void vscode.commands.executeCommand('setContext', 'explain.autoWalking', false);
     this.ui.clearHighlight();
     return true;
   }
@@ -402,6 +403,7 @@ export class ExplainSession extends DebugSession {
     const run = { cancelled: false, wake: () => {} };
     this.auto = run;
     this.ui.setAutoStatus(true);
+    void vscode.commands.executeCommand('setContext', 'explain.autoWalking', true);
     const dwell = vscode.workspace.getConfiguration('explain.auto').get<number>('dwellMs', 3000);
     this.log(`auto: start (dwell ${dwell} ms)`);
     try {
