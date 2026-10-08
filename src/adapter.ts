@@ -177,6 +177,7 @@ export class ExplainSession extends DebugSession {
   }
 
   private end() {
+    this.log('end of walk, session terminated');
     this.ui.clear();
     this.sendEvent(new TerminatedEvent());
   }
@@ -198,7 +199,8 @@ export class ExplainSession extends DebugSession {
       const explanation = await this.explainer.explainStatement(ctx);
       if (token !== this.explainToken) return;
       this.explanation = explanation;
-      this.ui.show(frame.uri, step.line, explanation, header);
+      const footer = reason === 'end' ? '_End of walk — F5/F10 or Shift+F5 to exit, Shift+F11 to go back up._' : undefined;
+      this.ui.show(frame.uri, step.line, explanation, header, footer);
       this.sendEvent(new InvalidatedEvent(['variables'], THREAD_ID));
     } catch (err) {
       if (token === this.explainToken) this.ui.showError(frame.uri, step.line, err);

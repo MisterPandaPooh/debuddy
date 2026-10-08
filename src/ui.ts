@@ -19,12 +19,13 @@ export class ExplainUi implements vscode.Disposable {
     this.render(uri, line, `${header ? header + '\n\n' : ''}_Explaining…_`);
   }
 
-  show(uri: vscode.Uri, line: number, e: Explanation, header?: string) {
+  show(uri: vscode.Uri, line: number, e: Explanation, header?: string, footer?: string) {
     const md = [
       header,
       `**Does** ${e.does}`,
       `**Why** ${e.why}`,
       e.watch ? `**Watch** ⚠️ ${e.watch}` : undefined,
+      footer,
     ]
       .filter(Boolean)
       .join('\n\n');
