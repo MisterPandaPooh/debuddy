@@ -9,6 +9,15 @@
   F10 · F11 · breakpoints · call stack · branch choice · follow the exception — on code you have never read.
 </p>
 
+<table align="center">
+  <tr>
+    <td align="center" width="25%"><b>🎛️ A native debugger experience</b><br><sub>a real Debug Adapter: F10 / F11 / Shift+F11, breakpoints, call stack, variables, step back, auto-walk</sub></td>
+    <td align="center" width="25%"><b>🔌 Zero configuration, 100% local</b><br><sub>one model download on first use, then no server, no key, no network — your code never leaves the machine</sub></td>
+    <td align="center" width="25%"><b>🧩 VS Code · Cursor · VSCodium</b><br><sub>any editor that runs VS Code extensions, with the same shortcuts</sub></td>
+    <td align="center" width="25%"><b>🗣️ JavaScript/TypeScript · Python · Rust, natively</b><br><sub>exact walkers; Go, Java, C#, Swift, PHP, Ruby… through the language server</sub></td>
+  </tr>
+</table>
+
 <p align="center">
   <a href="https://github.com/MisterPandaPooh/explain-mode/releases"><img alt="Download" src="https://img.shields.io/badge/download-VSIX-2ea44f"></a>
   <a href="https://github.com/MisterPandaPooh/explain-mode/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MisterPandaPooh/explain-mode/actions/workflows/ci.yml/badge.svg"></a>
@@ -35,12 +44,17 @@ appears right under it:
 Press **F11** on a call and you are inside the callee, with a one-line summary, where it is
 called from, and the reason you came. **Shift+F11** brings you back. Reach an `if` and F10 asks
 which branch to read. Reach a `throw` and F10 takes you to the `catch` that receives it — or
-tells you it leaves the function. It feels like a debugger because it *is* one: a real VS Code
-Debug Adapter, with the native toolbar, call stack, breakpoints and variables views.
+tells you it leaves the function.
 
-Nothing is executed. The model never guesses what a function does: the extension resolves the
-callees, the types, the throw sites and even the **test names that describe the function**, and
-hands all of that to a small model that runs on your machine.
+**It feels like a debugger because it *is* one** — a real VS Code Debug Adapter, with the native
+toolbar, call stack, breakpoints and variables views, the shortcuts you already know, in
+**VS Code, Cursor or VSCodium**.
+
+**Nothing is executed and nothing is configured.** The extension works out of the box, **100 %
+locally**: the model never guesses what a function does — the callees, the types, the throw sites
+and even the **test names that describe the function** are resolved deterministically and handed
+to a small model that runs on your machine. **JavaScript/TypeScript, Python and Rust are
+supported natively** (exact syntax walkers); other languages ride on their language server.
 
 ## Install
 
