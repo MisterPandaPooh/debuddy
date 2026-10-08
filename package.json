@@ -42,14 +42,14 @@
       "debug/toolbar": [
         {
           "command": "explain.autoWalk",
-          "when": "debugType == 'explain'",
+          "when": "explain.active",
           "group": "navigation@0"
         }
       ],
       "editor/title": [
         {
           "command": "explain.autoWalk",
-          "when": "debugType == 'explain'",
+          "when": "explain.active",
           "group": "navigation@0"
         }
       ]
@@ -65,7 +65,7 @@
         "command": "explain.autoWalk",
         "key": "ctrl+alt+a",
         "mac": "cmd+alt+a",
-        "when": "inDebugMode"
+        "when": "explain.active"
       }
     ],
     "breakpoints": [

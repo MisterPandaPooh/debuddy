@@ -8,8 +8,14 @@ export function activate(context: vscode.ExtensionContext) {
   const ui = new ExplainUi();
   const src = { explainer: new OllamaExplainer(), tests: new TestIndex() };
 
+  // Own context key for menus/keybindings: set while an Explain session is the active one.
+  const setActive = (on: boolean) => vscode.commands.executeCommand('setContext', 'explain.active', on);
+  void setActive(vscode.debug.activeDebugSession?.type === 'explain');
+
   context.subscriptions.push(
     ui,
+    vscode.debug.onDidChangeActiveDebugSession((s) => setActive(s?.type === 'explain')),
+    vscode.debug.onDidTerminateDebugSession(() => setActive(vscode.debug.activeDebugSession?.type === 'explain')),
     vscode.debug.registerDebugAdapterDescriptorFactory('explain', {
       createDebugAdapterDescriptor: () =>
         new vscode.DebugAdapterInlineImplementation(new ExplainSession(ui, src)),
