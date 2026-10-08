@@ -5,6 +5,11 @@ import { Explanation } from './explain';
 export class ExplainUi implements vscode.Disposable {
   private controller = vscode.comments.createCommentController('explain', 'Explain Mode');
   private thread?: vscode.CommentThread;
+  private output = vscode.window.createOutputChannel('Explain Mode');
+
+  log(msg: string) {
+    this.output.appendLine(`${new Date().toISOString().slice(11, 19)} ${msg}`);
+  }
 
   constructor() {
     this.controller.options = { placeHolder: '' };
@@ -52,5 +57,6 @@ export class ExplainUi implements vscode.Disposable {
   dispose() {
     this.clear();
     this.controller.dispose();
+    this.output.dispose();
   }
 }

@@ -99,6 +99,7 @@ export class ExplainSession extends DebugSession {
   ): void {
     const lines = (args.breakpoints ?? []).map((b) => b.line);
     this.breakpoints.set(args.source.path ?? '', new Set(lines));
+    this.log(`breakpoints ${path.basename(args.source.path ?? '?')}: ${lines.join(', ') || 'none'}`);
     response.body = { breakpoints: lines.map((line) => ({ verified: true, line })) };
     this.sendResponse(response);
   }
@@ -163,7 +164,16 @@ export class ExplainSession extends DebugSession {
 
   private atBreakpoint(): boolean {
     const f = this.top;
-    return this.breakpoints.get(f.uri.fsPath)?.has(f.steps[f.index].line) ?? false;
+    const bps = this.breakpoints.get(f.uri.fsPath);
+    if (!bps?.size) return false;
+    const step = f.steps[f.index];
+    const prevEnd = f.index > 0 ? f.steps[f.index - 1].endLine : f.startLine;
+    // A breakpoint on a blank line, `}` or `else` snaps forward to this step.
+    return [...bps].some((l) => l > prevEnd && l <= step.endLine);
+  }
+
+  private log(msg: string) {
+    this.ui.log(msg);
   }
 
   private end() {
@@ -177,6 +187,7 @@ export class ExplainSession extends DebugSession {
     const step = frame.steps[frame.index];
     const token = ++this.explainToken;
     this.explanation = undefined;
+    this.log(`stop(${reason}) ${frame.name}() L${step.line}: ${step.text.split('\n')[0]}`);
     this.sendEvent(new StoppedEvent(reason, THREAD_ID));
 
     try {
