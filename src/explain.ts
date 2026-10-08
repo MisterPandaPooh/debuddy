@@ -28,7 +28,8 @@ export interface StatementContext {
 export interface Explainer {
   explainStatement(ctx: StatementContext): Promise<Explanation>;
   exampleValues(ctx: StatementContext): Promise<ExampleValue[]>;
-  summarizeFunction(source: string, reason: string): Promise<string>;
+  /** `hints` are one-line summaries of the function's own callees ("name: summary"). */
+  summarizeFunction(source: string, reason: string, hints?: string[]): Promise<string>;
   answer(ctx: StatementContext, question: string): Promise<string>;
 }
 
@@ -93,14 +94,15 @@ export class OllamaExplainer implements Explainer {
     return parseValues(text, ctx.vars.map((v) => v.split(':')[0].trim()));
   }
 
-  summarizeFunction(source: string, reason: string): Promise<string> {
-    const key = source; // cache by exact text; a change invalidates naturally
+  summarizeFunction(source: string, reason: string, hints: string[] = []): Promise<string> {
+    const key = source + '\n' + hints.join('\n'); // cache by exact text; a change invalidates naturally
     let p = this.summaries.get(key);
     if (!p) {
+      const known = hints.length ? `Known functions:\n${hints.join('\n')}\n\n` : '';
       const prompt = `You are entering this function${reason ? ` (${reason})` : ''}.
-Summarize what it does in one sentence of at most 25 words. Mention fallbacks or thrown errors if any. Use only the code shown.
+Summarize what it does in one sentence of at most 25 words. Mention fallbacks or thrown errors if any. Use only the code shown${hints.length ? ' and the known functions' : ''}.
 
-${source}`;
+${known}${source}`;
       p = this.chat('You summarize source code tersely for a developer.', prompt, 60).then((s) => s.trim());
       this.summaries.set(key, p);
     }

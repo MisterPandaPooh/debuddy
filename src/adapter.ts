@@ -12,7 +12,7 @@ import {
   Thread,
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
-import { buildContext } from './context';
+import { buildContext, summarizeFrame } from './context';
 import { ExampleValue, Explainer, Explanation, StatementContext } from './explain';
 import { Frame, frameAt, resolveProjectCallee } from './navigator';
 import { ExplainUi } from './ui';
@@ -345,7 +345,8 @@ export class ExplainSession extends DebugSession {
   }
 
   private async frameHeader(frame: Frame): Promise<string> {
-    const summary = await this.explainer.summarizeFunction(frame.source, frame.reason);
+    const depth = vscode.workspace.getConfiguration('explain.context').get<number>('definitionDepth', 2);
+    const summary = await summarizeFrame(frame, this.explainer, depth);
     return `↳ **${frame.name}()** — ${summary}`;
   }
 }

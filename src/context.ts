@@ -20,7 +20,7 @@ export async function buildContext(frame: Frame, step: Step, explainer: Explaine
       const target = await vscode.workspace.openTextDocument(loc.uri);
       const callee = frameAt(target, loc.range.start.line + 1);
       if (callee) {
-        const summary = await explainer.summarizeFunction(callee.source, '');
+        const summary = await summarizeFrame(callee, explainer, definitionDepth() - 1);
         callees.push(`${call.name}: ${summary}`);
         continue;
       }
@@ -47,6 +47,42 @@ export async function buildContext(frame: Frame, step: Step, explainer: Explaine
     vars,
     reason: frame.reason,
   };
+}
+
+/** How many go-to-definition levels to resolve below the current statement. */
+function definitionDepth(): number {
+  return vscode.workspace.getConfiguration('explain.context').get<number>('definitionDepth', 2);
+}
+
+/**
+ * One-line summary of a function, informed by the summaries of its own project callees
+ * down to `depth` levels. Without those hints a small model invents behaviour.
+ */
+export async function summarizeFrame(
+  frame: Frame,
+  explainer: Explainer,
+  depth: number,
+  visited = new Set<string>(),
+): Promise<string> {
+  const key = `${frame.uri.fsPath}:${frame.startLine}`;
+  visited.add(key);
+  const hints: string[] = [];
+  if (depth > 0) {
+    const seen = new Set<string>();
+    const calls = frame.steps.flatMap((s) => s.calls).filter((c) => !STDLIB.test(c.name) && !seen.has(c.name) && seen.add(c.name));
+    const results = await Promise.all(
+      calls.map(async (call) => {
+        const loc = await resolveProjectCallee(frame.uri, call);
+        if (!loc) return undefined;
+        const doc = await vscode.workspace.openTextDocument(loc.uri);
+        const callee = frameAt(doc, loc.range.start.line + 1);
+        if (!callee || visited.has(`${callee.uri.fsPath}:${callee.startLine}`)) return undefined;
+        return `${call.name}: ${await summarizeFrame(callee, explainer, depth - 1, visited)}`;
+      }),
+    );
+    hints.push(...results.filter((r): r is string => !!r));
+  }
+  return explainer.summarizeFunction(frame.source, frame.reason, hints);
 }
 
 /**
