@@ -12,10 +12,10 @@
 
 <table align="center">
   <tr>
-    <td align="center" width="25%"><b>🎛️ A native debugger experience</b><br><sub>a real Debug Adapter: F10 / F11 / Shift+F11, breakpoints, call stack, variables, step back, auto-walk</sub></td>
-    <td align="center" width="25%"><b>🔌 Zero configuration, 100% local</b><br><sub>one model download on first use, then no server, no key, no network — your code never leaves the machine</sub></td>
-    <td align="center" width="25%"><b>🧩 VS Code · Cursor · VSCodium</b><br><sub>any editor that runs VS Code extensions, with the same shortcuts</sub></td>
-    <td align="center" width="25%"><b>🗣️ JavaScript/TypeScript · Python · Rust, natively</b><br><sub>exact walkers; Go, Java, C#, Swift, PHP, Ruby… through the language server</sub></td>
+    <td align="center" width="25%"><b>🎛️ A native debugger experience</b><br><sub>A real Debug Adapter: F10 / F11 / Shift+F11, breakpoints, call stack, variables, step back, auto-walk</sub></td>
+    <td align="center" width="25%"><b>🔌 Zero configuration, 100% local</b><br><sub>One model download on first use, then no server, no key, no network — your code never leaves the machine</sub></td>
+    <td align="center" width="25%"><b>🧩 VS Code · Cursor · VSCodium</b><br><sub>Any editor that runs VS Code extensions, with the same shortcuts</sub></td>
+    <td align="center" width="25%"><b>🗣️ JavaScript/TypeScript · Python · Rust, natively</b><br><sub>Exact walkers; Go, Java, C#, Swift, PHP, Ruby… through the language server</sub></td>
   </tr>
 </table>
 
