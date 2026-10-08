@@ -5,3 +5,4 @@ sample/.vscode/
 test/adapter.bundle.js
 test/embedded.bundle.js
 test/lang.bundle.js
+vsix/

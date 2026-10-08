@@ -76,8 +76,9 @@ function collectSteps(sf: ts.SourceFile, body: ts.Node, doc: vscode.TextDocument
       // `} else if (…) {` shares a line with the end of `then`: that line belongs to the else side.
       const elseLine = ts.isIfStatement(n) && n.elseStatement ? lineOf(n.elseStatement.getStart()) : undefined;
       const thenTo = ts.isIfStatement(n) ? lineOf(n.thenStatement.getEnd()) : 0;
+      // Only a real fork (an else) is worth a question; a lone `if` is read in order.
       const branches =
-        ts.isIfStatement(n) && head !== n
+        ts.isIfStatement(n) && head !== n && n.elseStatement
           ? [
               { label: 'then', from: lineOf(n.thenStatement.getStart()), to: elseLine !== undefined && elseLine <= thenTo ? elseLine - 1 : thenTo },
               ...(n.elseStatement && elseLine !== undefined
@@ -93,6 +94,7 @@ function collectSteps(sf: ts.SourceFile, body: ts.Node, doc: vscode.TextDocument
         declared: collectDeclared(n, doc),
         branches,
         handler: handlers.at(-1),
+        guard: ts.isIfStatement(n) ? guardKind(n.thenStatement) : undefined,
         throwsSelf: ts.isThrowStatement(n) ? thrownName(n) : undefined,
         mayThrow: head === n && !ts.isThrowStatement(n) ? nestedThrow(n) : undefined,
       });
@@ -134,6 +136,17 @@ function thrownName(n: ts.ThrowStatement): string {
   const e = n.expression;
   const id = ts.isNewExpression(e) || ts.isCallExpression(e) ? e.expression : e;
   return ts.isIdentifier(id) ? id.text : ts.isPropertyAccessExpression(id) ? id.name.text : 'error';
+}
+
+/** How an `if` body leaves the function, when it does: `return`, `throw`, `continue`, `break`. */
+function guardKind(body: ts.Statement): string | undefined {
+  const last = ts.isBlock(body) ? body.statements.at(-1) : body;
+  if (!last) return undefined;
+  if (ts.isReturnStatement(last)) return 'return';
+  if (ts.isThrowStatement(last)) return 'throw';
+  if (ts.isContinueStatement(last)) return 'continue';
+  if (ts.isBreakStatement(last)) return 'break';
+  return undefined;
 }
 
 /** First `throw` nested in a statement (e.g. a one-line `if`), excluding nested functions. */

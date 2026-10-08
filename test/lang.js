@@ -24,6 +24,7 @@ const cases = [
       const flags = [
         s.branches ? `branches=${s.branches.map((b) => `${b.label}:${b.from}-${b.to}`).join(',')}` : '',
         s.handler ? `handler=L${s.handler.line}` : '',
+        s.guard ? `guard=${s.guard}` : '',
         s.throwsSelf ? `throws=${s.throwsSelf}` : '',
         s.mayThrow ? `may=${s.mayThrow}` : '',
         s.declared.length ? `decl=[${s.declared.map((d) => d.name)}]` : '',

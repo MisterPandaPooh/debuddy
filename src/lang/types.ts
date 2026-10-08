@@ -19,6 +19,8 @@ export interface Step {
   branches?: Branch[];
   /** The `catch` step that would receive an exception thrown here, if the step is inside a `try`. */
   handler?: { line: number; text: string };
+  /** An `if` whose body leaves the function (return/throw/break/continue): a guard, not a fork worth asking about. */
+  guard?: string;
   /** For `throw` statements: the error being thrown. Certain, so stepping follows it. */
   throwsSelf?: string;
   /** A `throw` nested in a one-line statement (`if (x) throw …`). Possible, not certain. */

@@ -29,6 +29,8 @@ export interface TreeSitterProfile {
   throwTypes: Record<string, (n: Node) => string | undefined>;
   /** Nodes that *may* raise without being a raise statement themselves (rust `?`). */
   mayThrowTypes?: Record<string, (n: Node) => string | undefined>;
+  /** Statement types that leave the function or loop (guard detection on `if` bodies). */
+  exitTypes?: string[];
   /** try/except shape, when the language has one. */
   tryType?: { type: string; body: string; handler: string; finally?: string; else?: string };
 }
@@ -232,7 +234,10 @@ function collectSteps(p: TreeSitterProfile, body: Node, doc: vscode.TextDocument
         : undefined;
       const headStart = lineOf(n);
       const headEnd = headNode ? endLineOf(headNode) : headStart;
-      push(headStart, headEnd, text, headNode ? [headNode] : [], { branches: branches && branches.length > 1 ? branches : undefined });
+      const guardBody = bodies[0];
+      const lastInBody = guardBody && p.blockTypes.includes(guardBody.type) ? guardBody.namedChildren.at(-1) : guardBody;
+      const guard = spec.branching && lastInBody && p.exitTypes?.includes(lastInBody.type) ? lastInBody.type.replace(/_(statement|expression)$/, '') : undefined;
+      push(headStart, headEnd, text, headNode ? [headNode] : [], { branches: branches && branches.length > 1 ? branches : undefined, guard });
       for (const b of bodies) (p.blockTypes.includes(b.type) ? visitBlock : visitStatement)(b);
       for (const c of clauses) {
         const cb = c.namedChildren.find((x) => p.blockTypes.includes(x.type));

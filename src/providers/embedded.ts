@@ -83,7 +83,7 @@ export async function downloadEmbeddedModel(dir: string, id: string): Promise<st
       token.onCancellationRequested(() => void downloader.cancel({ deleteTempFile: true }));
       try {
         const file = await downloader.download();
-        void vscode.window.showInformationMessage(`Explain Mode: ${path.basename(file)} is ready.`);
+        void vscode.window.showInformationMessage(`Explain Mode: ${id === DEFAULT_EMBEDDED ? EMBEDDED_LABEL : path.basename(file)} is ready.`);
         return file;
       } catch (err) {
         if (!token.isCancellationRequested) void vscode.window.showErrorMessage(`Download failed: ${errMsg(err)}`);

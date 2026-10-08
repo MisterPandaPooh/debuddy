@@ -635,7 +635,9 @@ export class ExplainSession extends DebugSession {
             ? '_Auto-walking — F6 or the status bar to pause._'
             : step.branches
               ? '_F10 will ask which branch to follow._'
-              : undefined;
+              : step.guard
+                ? `_Guard clause: when the condition holds, the function ${step.guard}s here; otherwise reading continues below._`
+                : undefined;
       this.ui.show(frame.uri, step.line, explanation, { header, footer, throws: ctx.throws, lands });
       this.sendEvent(new InvalidatedEvent(['variables'], THREAD_ID));
       // Values are a second local call; let them land after the explanation without blocking it.

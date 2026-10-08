@@ -36,6 +36,7 @@ export const rustProfile: TreeSitterProfile = {
   callTypes: { call_expression: 'function', macro_invocation: 'macro', method_call_expression: 'name' },
   declTypes: { let_declaration: 'pattern', let_condition: 'pattern' },
   throwTypes: { macro_invocation: panicName, return_expression: errReturn },
+  exitTypes: ['return_expression', 'continue_expression', 'break_expression'],
   // `?` hands any Err to the caller: possible, not certain.
   mayThrowTypes: { try_expression: () => '? (Err propagates to the caller)', call_expression: errReturn },
 };
