@@ -14,7 +14,7 @@ import {
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { ContextSources, buildContext, summarizeFrame } from './context';
 import { ExampleValue, Explanation, StatementContext } from './explain';
-import { Frame, Step, frameAt, referencesOf, resolveProjectCallee } from './navigator';
+import { Frame, Step, frameAt, hoverText, referencesOf, resolveProjectCallee } from './navigator';
 import { ExplainUi } from './ui';
 
 const THREAD_ID = 1;
@@ -47,6 +47,8 @@ export class ExplainSession extends DebugSession {
   private explainToken = 0;
   /** Explanations by statement, so the next step (prefetched) and Step Back are instant. */
   private prepared = new Map<string, Promise<Prepared>>();
+  /** The running auto-walk, if any; cancelled by Pause, breakpoints, end or disconnect. */
+  private auto?: { cancelled: boolean; wake: () => void };
 
   constructor(private ui: ExplainUi, private src: ContextSources) {
     super();
@@ -141,24 +143,46 @@ export class ExplainSession extends DebugSession {
     this.sendResponse(response);
   }
 
-  /** Hover on an identifier shows its example value; the Debug Console asks the model. */
+  /**
+   * Hover on an identifier shows its example value or type; the Debug Console asks the model.
+   * Only a hover with nothing to say errors (silently: VS Code then shows the language hover).
+   */
   protected async evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments) {
     const expr = args.expression.trim();
-    try {
-      if (args.context === 'repl' && this.context) {
-        const text = await this.src.explainer.answer(this.context, expr);
-        response.body = { result: text, variablesReference: 0 };
-      } else {
-        const known = this.values.find((x) => x.name === expr);
-        const type = this.context?.vars.find((x) => x.startsWith(`${expr}:`));
-        if (!known && !type) return this.sendErrorResponse(response, 2, 'no example value for this expression');
-        const parts = [type ?? expr, known ? `example: ${known.example}` : '', known?.alternative ? `or: ${known.alternative}` : ''];
-        response.body = { result: parts.filter(Boolean).join('\n'), variablesReference: 0 };
-      }
+    const ok = (result: string) => {
+      response.body = { result, variablesReference: 0 };
       this.sendResponse(response);
+    };
+    try {
+      if (args.context === 'repl') {
+        if (!this.context) return ok('Still explaining this statement — ask again in a moment.');
+        return ok(await this.src.explainer.answer(this.context, expr));
+      }
+      const known = this.values.find((x) => x.name === expr);
+      const type = this.context?.vars.find((x) => x.startsWith(`${expr}:`)) ?? (await this.typeOfLocal(expr));
+      if (known || type) {
+        const parts = [type ?? expr, known ? `example: ${known.example}` : '', known?.alternative ? `or: ${known.alternative}` : ''];
+        return ok(parts.filter(Boolean).join('\n'));
+      }
+      if (args.context === 'hover') return this.sendErrorResponse(response, 2, 'not a variable of this walkthrough');
+      ok(`${expr}: not a variable declared in ${this.top?.name ?? 'this function'}() (static walkthrough, no runtime values)`);
     } catch (err) {
-      this.sendErrorResponse(response, 3, err instanceof Error ? err.message : String(err));
+      this.log(`evaluate: ${err}`);
+      ok(`(unavailable: ${err instanceof Error ? err.message : String(err)})`);
     }
+  }
+
+  /** Type of a variable declared anywhere in the current function, via the LSP hover at its declaration. */
+  private async typeOfLocal(name: string): Promise<string | undefined> {
+    const frame = this.top;
+    if (!frame) return undefined;
+    for (const s of frame.steps) {
+      const d = s.declared.find((x) => x.name === name);
+      if (!d) continue;
+      const h = await hoverText(frame.uri, d.position);
+      if (h) return `${name}: ${h.replace(/^\(?(const|let|var)\)?\s*[\w$]+:\s*/, '')}`;
+    }
+    return undefined;
   }
 
   protected stepBackRequest(response: DebugProtocol.StepBackResponse): void {
@@ -195,9 +219,80 @@ export class ExplainSession extends DebugSession {
     this.sendResponse(response);
   }
 
-  protected nextRequest(response: DebugProtocol.NextResponse): void {
+  protected async nextRequest(response: DebugProtocol.NextResponse) {
     this.sendResponse(response);
+    await this.askBranch();
     this.moveNext() ? void this.stopAt('step') : this.end();
+  }
+
+  /** On an `if` head, let the user pick a path; the other branch is skipped in this frame. */
+  private async askBranch() {
+    const frame = this.top;
+    const step = frame.steps[frame.index];
+    if (!step.branches || !vscode.workspace.getConfiguration('explain').get<boolean>('askBranch', true)) return;
+    const choice = await this.ui.pickBranch(step);
+    if (!choice) return;
+    frame.skip.push(...step.branches.filter((b) => b !== choice));
+    this.log(`branch: ${choice.label} (skipping ${step.branches.filter((b) => b !== choice).map((b) => b.label).join(', ') || 'nothing'})`);
+  }
+
+  protected pauseRequest(response: DebugProtocol.PauseResponse): void {
+    this.sendResponse(response);
+    if (!this.cancelAuto()) return;
+    void this.stopAt('pause');
+  }
+
+  private cancelAuto(): boolean {
+    if (!this.auto) return false;
+    this.auto.cancelled = true;
+    this.auto.wake();
+    this.auto = undefined;
+    this.ui.setAutoStatus(false);
+    this.ui.clearHighlight();
+    return true;
+  }
+
+  /** Auto mode: advance and explain every statement, pausing on breakpoints or F6. */
+  private async autoWalk() {
+    const run = { cancelled: false, wake: () => {} };
+    this.auto = run;
+    this.ui.setAutoStatus(true);
+    const dwell = vscode.workspace.getConfiguration('explain.auto').get<number>('dwellMs', 3000);
+    for (let guard = 0; guard < 5000 && !run.cancelled; guard++) {
+      let entered = false;
+      if (await this.enterCalleeWithBreakpoint()) {
+        if (this.functionBreakpoints.has(this.top.name) || this.atBreakpoint()) {
+          this.cancelAuto();
+          return void this.stopAt(this.atBreakpoint() ? 'breakpoint' : 'function breakpoint', true);
+        }
+        entered = true;
+      } else {
+        if (this.atLastStep()) {
+          this.cancelAuto();
+          return void this.stopAt('end');
+        }
+        this.moveNext();
+        if (this.atBreakpoint()) {
+          this.cancelAuto();
+          return void this.stopAt('breakpoint');
+        }
+      }
+      if (run.cancelled) return;
+      this.history.push({ stack: [...this.stack], indices: this.stack.map((f) => f.index), reason: 'auto' });
+      const frame = this.top;
+      const step = frame.steps[frame.index];
+      this.log(`auto ${frame.name}() L${step.line}: ${step.text.split('\n')[0]}`);
+      await this.ui.highlight(frame.uri, step.line);
+      await this.present('auto', entered);
+      if (run.cancelled) return;
+      await new Promise<void>((resolve) => {
+        const t = setTimeout(resolve, dwell);
+        run.wake = () => {
+          clearTimeout(t);
+          resolve();
+        };
+      });
+    }
   }
 
   protected async stepInRequest(response: DebugProtocol.StepInResponse) {
@@ -228,6 +323,7 @@ export class ExplainSession extends DebugSession {
 
   protected async continueRequest(response: DebugProtocol.ContinueResponse) {
     this.sendResponse(response);
+    if (vscode.workspace.getConfiguration('explain.auto').get<boolean>('enabled', true)) return this.autoWalk();
     const wasAtEnd = this.atLastStep();
     // Walk until a breakpoint; enter project callees that contain one so a
     // breakpoint in another function is reachable from the entry point.
@@ -275,6 +371,7 @@ export class ExplainSession extends DebugSession {
 
   protected disconnectRequest(response: DebugProtocol.DisconnectResponse): void {
     this.explainToken++;
+    this.cancelAuto();
     this.ui.clear();
     this.sendResponse(response);
   }
@@ -283,9 +380,10 @@ export class ExplainSession extends DebugSession {
   private moveNext(): boolean {
     while (this.stack.length) {
       const f = this.top;
-      if (f.index + 1 < f.steps.length) {
+      while (f.index + 1 < f.steps.length) {
         f.index++;
-        return true;
+        const s = f.steps[f.index];
+        if (!f.skip.some((b) => s.line >= b.from && s.line <= b.to)) return true;
       }
       this.stack.pop();
     }
@@ -308,6 +406,7 @@ export class ExplainSession extends DebugSession {
 
   private end() {
     this.log('end of walk, session terminated');
+    this.cancelAuto();
     this.ui.clear();
     this.sendEvent(new TerminatedEvent());
   }
@@ -316,14 +415,21 @@ export class ExplainSession extends DebugSession {
   private async stopAt(reason: string, entered = false) {
     const frame = this.top;
     const step = frame.steps[frame.index];
+    this.history.push({ stack: [...this.stack], indices: this.stack.map((f) => f.index), reason });
+    this.log(`stop(${reason}) ${frame.name}() L${step.line}: ${step.text.split('\n')[0]}`);
+    this.ui.clearHighlight();
+    this.sendEvent(new StoppedEvent(reason, THREAD_ID));
+    await this.present(reason, entered);
+  }
+
+  /** Explain the current statement and refresh the UI; shared by stops and auto mode. */
+  private async present(reason: string, entered: boolean) {
+    const frame = this.top;
+    const step = frame.steps[frame.index];
     const token = ++this.explainToken;
     this.explanation = undefined;
     this.values = [];
     this.context = undefined;
-    this.history.push({ stack: [...this.stack], indices: this.stack.map((f) => f.index), reason });
-    this.log(`stop(${reason}) ${frame.name}() L${step.line}: ${step.text.split('\n')[0]}`);
-    this.sendEvent(new StoppedEvent(reason, THREAD_ID));
-
     try {
       let header = entered ? await this.frameHeader(frame) : undefined;
       if (this.firstStop) {
@@ -336,7 +442,14 @@ export class ExplainSession extends DebugSession {
       if (token !== this.explainToken) return;
       this.context = ctx;
       this.explanation = explanation;
-      const footer = reason === 'end' ? '_End of walk — F5/F10 or Shift+F5 to exit, Shift+F11 to go back up._' : undefined;
+      const footer =
+        reason === 'end'
+          ? '_End of walk — F5/F10 or Shift+F5 to exit, Shift+F11 to go back up._'
+          : reason === 'auto'
+            ? '_Auto-walking — F6 or the status bar to pause._'
+            : step.branches
+              ? '_F10 will ask which branch to follow._'
+              : undefined;
       this.ui.show(frame.uri, step.line, explanation, { header, footer, throws: ctx.throws });
       this.sendEvent(new InvalidatedEvent(['variables'], THREAD_ID));
       // Values are a second local call; let them land after the explanation without blocking it.

@@ -12,7 +12,8 @@ const explainer = {
 };
 const ui = {
   log: (m) => console.log('   log:', m),
-  showPending: () => {}, show: (u, l, e, h, f) => console.log(`   ui.show L${l}`, e.does, f ?? ''), showError: (u, l, e) => console.log('   ui.error', e), clear: () => {},
+  showPending: () => {}, show: (u, l, e, o) => console.log(`   ui.show L${l}`, e.does, o?.footer ?? ''), showError: (u, l, e) => console.log('   ui.error', e), clear: () => {},
+  highlight: async (u, l) => console.log(`   ui.highlight L${l}`), clearHighlight: () => {}, setAutoStatus: () => {}, pickBranch: async () => undefined,
 };
 
 const session = new ExplainSession(ui, { explainer, tests: { titlesFor: async () => ['getRoles › returns [] when no doc'] } });
@@ -36,6 +37,7 @@ const tick = () => new Promise((r) => setTimeout(r, 50));
   await tick();
   send('continue', { threadId: 1 });
   await tick();
+  if (process.env.EXPLAIN_AUTO === '1') { await tick(); await tick(); send('pause', { threadId: 1 }); await tick(); }
   send('stackTrace', { threadId: 1 });
   send('scopes', { frameId: 0 });
   send('variables', { variablesReference: 2 });

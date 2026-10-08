@@ -111,6 +111,21 @@
           "type": "number",
           "default": 2,
           "description": "Go-to-definition levels resolved below the current statement; each level's functions are summarized and fed to the level above."
+        },
+        "explain.auto.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Continue (F5) auto-walks: advances and explains every statement; breakpoints and Pause (F6) stop it. Off: F5 runs silently to the next breakpoint."
+        },
+        "explain.auto.dwellMs": {
+          "type": "number",
+          "default": 3000,
+          "description": "Time to stay on each statement in auto mode, after its explanation is shown."
+        },
+        "explain.askBranch": {
+          "type": "boolean",
+          "default": true,
+          "description": "On Step Over at an `if`, ask which branch to follow; the other one is skipped."
         }
       }
     }
@@ -120,7 +135,8 @@
     "watch": "npm run build -- --watch",
     "typecheck": "tsc --noEmit",
     "bench": "node bench/bench.mjs",
-    "test:dap": "esbuild src/adapter.ts --bundle --platform=node --format=cjs --outfile=test/adapter.bundle.js --alias:vscode=./test/vscode-stub.js && node test/dap.js sample/user.service.ts 11 13"
+    "test:dap": "esbuild src/adapter.ts --bundle --platform=node --format=cjs --outfile=test/adapter.bundle.js --alias:vscode=./test/vscode-stub.js && node test/dap.js sample/user.service.ts 11 13",
+    "test:dap:auto": "EXPLAIN_AUTO=1 npm run test:dap"
   },
   "devDependencies": {
     "@types/node": "^22",

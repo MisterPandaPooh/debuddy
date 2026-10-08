@@ -10,6 +10,14 @@ export interface Step {
   calls: { name: string; position: vscode.Position }[];
   /** Variables this statement declares (incl. destructuring), for example values. */
   declared: { name: string; position: vscode.Position }[];
+  /** For `if` heads: the line ranges of each branch body, so the user can pick a path. */
+  branches?: Branch[];
+}
+
+export interface Branch {
+  label: string;
+  from: number;
+  to: number;
 }
 
 /** A function the user is stepping through. */
@@ -27,6 +35,8 @@ export interface Frame {
   throws: string[];
   /** Position of the function name, for reference lookups; absent for anonymous functions. */
   namePosition?: vscode.Position;
+  /** Line ranges the user chose not to explore (the other side of an `if`). */
+  skip: Branch[];
 }
 
 type FnNode = ts.FunctionLikeDeclaration;
@@ -67,20 +77,48 @@ function enclosingFunction(sf: ts.SourceFile, offset: number): FnNode | undefine
 /** Statements in document order, descending into blocks but never into nested functions. */
 function collectSteps(sf: ts.SourceFile, body: ts.Node, doc: vscode.TextDocument): Step[] {
   const steps: Step[] = [];
+  const lineOf = (pos: number) => doc.positionAt(pos).line + 1;
+  // Keyword-only steps (`try`, `catch (e)`, `finally`) make no calls; their blocks are walked separately.
+  const push = (start: number, end: number, text: string) =>
+    steps.push({ line: lineOf(start), endLine: lineOf(end), text, calls: [], declared: [] });
   const visit = (n: ts.Node) => {
     if (ts.isFunctionLike(n)) return;
+    if (ts.isTryStatement(n)) {
+      // `try` / `catch (e)` / `finally` each get a step; their blocks are walked normally.
+      push(n.getStart(), n.tryBlock.getStart(), 'try');
+      ts.forEachChild(n.tryBlock, visit);
+      if (n.catchClause) {
+        push(n.catchClause.getStart(), n.catchClause.block.getStart(), n.catchClause.getText().slice(0, n.catchClause.block.getStart() - n.catchClause.getStart()).trim());
+        ts.forEachChild(n.catchClause.block, visit);
+      }
+      if (n.finallyBlock) {
+        push(n.finallyBlock.getStart() - 'finally '.length, n.finallyBlock.getStart(), 'finally');
+        ts.forEachChild(n.finallyBlock, visit);
+      }
+      return;
+    }
     if (ts.isStatement(n) && !ts.isBlock(n)) {
       // The step covers the statement head only: `if (…)`, `for (…)`, `try`, not their bodies —
       // unless the whole statement fits on one line, then it is a single step.
       const head = headNode(n, doc);
       const start = doc.positionAt(head.getStart());
       const end = doc.positionAt(head.getEnd());
+      const branches =
+        ts.isIfStatement(n) && head !== n
+          ? [
+              { label: 'then', from: lineOf(n.thenStatement.getStart()), to: lineOf(n.thenStatement.getEnd()) },
+              ...(n.elseStatement
+                ? [{ label: 'else', from: lineOf(n.elseStatement.getStart()), to: lineOf(n.elseStatement.getEnd()) }]
+                : []),
+            ]
+          : undefined;
       steps.push({
         line: start.line + 1,
         endLine: end.line + 1,
         text: head.getText(),
         calls: collectCalls(head, doc),
         declared: collectDeclared(n, doc),
+        branches,
       });
       if (head === n) return;
     }
@@ -164,6 +202,7 @@ export function frameAt(doc: vscode.TextDocument, line: number, reason = ''): Fr
     index,
     reason,
     throws: collectThrows(fn.body),
+    skip: [],
     namePosition: nameNode && ts.isIdentifier(nameNode) ? doc.positionAt(nameNode.getStart()) : undefined,
   };
 }

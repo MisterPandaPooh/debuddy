@@ -14,5 +14,10 @@ function openTextDocument(p) {
 module.exports = {
   Position, Uri, Range: class {}, Location: class {},
   commands: { executeCommand: async () => [] },
-  workspace: { getConfiguration: () => ({ get: (_k, d) => d }), openTextDocument, getWorkspaceFolder: () => ({}), findFiles: async () => [], fs: { readFile: async () => new Uint8Array() } },
+  workspace: { getConfiguration: (section) => ({ get: (k, d) => {
+      if (section === 'explain.auto' && k === 'enabled') return process.env.EXPLAIN_AUTO === '1';
+      if (section === 'explain.auto' && k === 'dwellMs') return 20;
+      if (section === 'explain' && k === 'askBranch') return false;
+      return d;
+    } }), openTextDocument, getWorkspaceFolder: () => ({}), findFiles: async () => [], fs: { readFile: async () => new Uint8Array() } },
 };
