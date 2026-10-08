@@ -5,36 +5,77 @@
   "version": "0.0.1",
   "publisher": "netanelcs",
   "private": true,
-  "engines": { "vscode": "^1.95.0" },
-  "categories": ["Debuggers", "Programming Languages"],
-  "activationEvents": ["onDebug", "onCommand:explain.startHere"],
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Debuggers",
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onDebug",
+    "onCommand:explain.startHere"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
-      { "command": "explain.startHere", "title": "Explain Mode: Start Here", "category": "Explain" }
+      {
+        "command": "explain.startHere",
+        "title": "Explain Mode: Start Here",
+        "category": "Explain"
+      }
     ],
     "menus": {
       "editor/context": [
-        { "command": "explain.startHere", "when": "editorLangId =~ /typescript|javascript/", "group": "navigation@1" }
+        {
+          "command": "explain.startHere",
+          "when": "editorLangId =~ /typescript|javascript/",
+          "group": "navigation@1"
+        }
       ]
     },
     "keybindings": [
-      { "command": "explain.startHere", "key": "ctrl+alt+e", "mac": "cmd+alt+e", "when": "editorTextFocus && !inDebugMode" }
+      {
+        "command": "explain.startHere",
+        "key": "ctrl+alt+e",
+        "mac": "cmd+alt+e",
+        "when": "editorTextFocus && !inDebugMode"
+      }
     ],
-    "breakpoints": [{ "language": "typescript" }, { "language": "javascript" }],
+    "breakpoints": [
+      {
+        "language": "typescript"
+      },
+      {
+        "language": "javascript"
+      }
+    ],
     "debuggers": [
       {
         "type": "explain",
         "label": "Explain Mode",
-        "languages": ["typescript", "javascript"],
+        "languages": [
+          "typescript",
+          "javascript"
+        ],
         "initialConfigurations": [
-          { "type": "explain", "request": "launch", "name": "Explain Mode: Start Here" }
+          {
+            "type": "explain",
+            "request": "launch",
+            "name": "Explain Mode: Start Here"
+          }
         ],
         "configurationAttributes": {
           "launch": {
             "properties": {
-              "file": { "type": "string", "description": "File to start in." },
-              "line": { "type": "number", "description": "1-based line to start at." }
+              "file": {
+                "type": "string",
+                "description": "File to start in."
+              },
+              "line": {
+                "type": "number",
+                "description": "1-based line to start at."
+              }
             }
           }
         }
@@ -43,8 +84,14 @@
     "configuration": {
       "title": "Explain Mode",
       "properties": {
-        "explain.ollamaUrl": { "type": "string", "default": "http://localhost:11434" },
-        "explain.model": { "type": "string", "default": "qwen2.5-coder:3b" }
+        "explain.ollamaUrl": {
+          "type": "string",
+          "default": "http://localhost:11434"
+        },
+        "explain.model": {
+          "type": "string",
+          "default": "qwen2.5-coder:3b"
+        }
       }
     }
   },
@@ -52,7 +99,8 @@
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
     "watch": "npm run build -- --watch",
     "typecheck": "tsc --noEmit",
-    "bench": "node bench/bench.mjs"
+    "bench": "node bench/bench.mjs",
+    "test:dap": "esbuild src/adapter.ts --bundle --platform=node --format=cjs --outfile=test/adapter.bundle.js --alias:vscode=./test/vscode-stub.js && node test/dap.js sample/user.service.ts 11 13"
   },
   "devDependencies": {
     "@types/node": "^22",

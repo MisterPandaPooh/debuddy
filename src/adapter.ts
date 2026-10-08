@@ -44,6 +44,11 @@ export class ExplainSession extends DebugSession {
     return this.stack[this.stack.length - 1];
   }
 
+  protected dispatchRequest(request: DebugProtocol.Request): void {
+    this.log(`← ${request.command}${request.command === 'setBreakpoints' ? ' ' + JSON.stringify(request.arguments) : ''}`);
+    super.dispatchRequest(request);
+  }
+
   protected initializeRequest(response: DebugProtocol.InitializeResponse): void {
     response.body = { supportsConfigurationDoneRequest: true };
     this.sendResponse(response);
@@ -93,7 +98,7 @@ export class ExplainSession extends DebugSession {
     this.sendResponse(response);
   }
 
-  protected setBreakpointsRequest(
+  protected setBreakPointsRequest(
     response: DebugProtocol.SetBreakpointsResponse,
     args: DebugProtocol.SetBreakpointsArguments,
   ): void {
@@ -135,12 +140,50 @@ export class ExplainSession extends DebugSession {
     this.moveNext() ? void this.stopAt('step') : this.end();
   }
 
-  protected continueRequest(response: DebugProtocol.ContinueResponse): void {
+  protected async continueRequest(response: DebugProtocol.ContinueResponse) {
     this.sendResponse(response);
-    while (this.moveNext()) {
+    const wasAtEnd = this.atLastStep();
+    // Walk until a breakpoint; enter project callees that contain one so a
+    // breakpoint in another function is reachable from the entry point.
+    for (let guard = 0; guard < 5000; guard++) {
+      if (await this.enterCalleeWithBreakpoint()) {
+        if (this.atBreakpoint()) return void this.stopAt('breakpoint', true);
+        continue;
+      }
+      if (this.atLastStep()) break;
+      this.moveNext();
       if (this.atBreakpoint()) return void this.stopAt('breakpoint');
     }
+    // No breakpoint ahead: park on the last statement instead of vanishing silently.
+    if (this.stack.length && !wasAtEnd) return void this.stopAt('end');
     this.end();
+  }
+
+  private atLastStep(): boolean {
+    return this.stack.length === 1 && this.top.index === this.top.steps.length - 1;
+  }
+
+  /** If the current statement calls a project function holding a breakpoint, step into it. */
+  private async enterCalleeWithBreakpoint(): Promise<boolean> {
+    const caller = this.top;
+    const step = caller.steps[caller.index];
+    for (const call of step.calls) {
+      const loc = await resolveProjectCallee(caller.uri, call);
+      if (!loc) continue;
+      const bps = this.breakpoints.get(loc.uri.fsPath);
+      if (!bps?.size) continue;
+      const doc = await vscode.workspace.openTextDocument(loc.uri);
+      const frame = frameAt(doc, loc.range.start.line + 1, `stepped into from ${caller.name}(), which runs: ${step.text}`);
+      if (!frame) continue;
+      const last = frame.steps[frame.steps.length - 1];
+      if (![...bps].some((l) => l >= frame.startLine && l <= last.endLine)) continue;
+      // Never re-enter a frame already on the stack (recursion).
+      if (this.stack.some((f) => f.uri.fsPath === frame.uri.fsPath && f.startLine === frame.startLine)) continue;
+      this.stack.push(frame);
+      this.log(`continue: entered ${frame.name}() for breakpoint`);
+      return true;
+    }
+    return false;
   }
 
   protected disconnectRequest(response: DebugProtocol.DisconnectResponse): void {

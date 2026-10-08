@@ -2,3 +2,4 @@ node_modules/
 dist/
 *.vsix
 sample/.vscode/
+test/adapter.bundle.js
