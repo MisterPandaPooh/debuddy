@@ -25,6 +25,16 @@ export function activate(context: vscode.ExtensionContext) {
         return config.file ? config : undefined;
       },
     }),
+    // Shows "Explain Mode: Start Here" in the F5 / Run and Debug picker, even with no launch.json.
+    vscode.debug.registerDebugConfigurationProvider(
+      'explain',
+      {
+        provideDebugConfigurations: () => [
+          { type: 'explain', request: 'launch', name: 'Explain Mode: Start Here' },
+        ],
+      },
+      vscode.DebugConfigurationProviderTriggerKind.Dynamic,
+    ),
     vscode.commands.registerCommand('explain.startHere', () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) return;

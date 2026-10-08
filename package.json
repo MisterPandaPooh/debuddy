@@ -27,9 +27,11 @@
         "type": "explain",
         "label": "Explain Mode",
         "languages": ["typescript", "javascript"],
+        "initialConfigurations": [
+          { "type": "explain", "request": "launch", "name": "Explain Mode: Start Here" }
+        ],
         "configurationAttributes": {
           "launch": {
-            "required": ["file", "line"],
             "properties": {
               "file": { "type": "string", "description": "File to start in." },
               "line": { "type": "number", "description": "1-based line to start at." }
