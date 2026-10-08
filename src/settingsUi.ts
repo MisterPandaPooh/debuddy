@@ -1,3 +1,4 @@
+import { execFile } from 'child_process';
 import * as vscode from 'vscode';
 import { ProviderKind } from './providers';
 
@@ -76,8 +77,17 @@ export class SettingsUi implements vscode.Disposable {
         return;
       }
       case 'cursor-cli': {
-        const model = await vscode.window.showInputBox({ prompt: 'Cursor model (--model), e.g. sonnet-4.5, gpt-5; empty = default', value: c.get('cursor.model') });
-        if (model !== undefined) await set('cursor.model', model);
+        // Effort is part of the model id at Cursor (-low / -high / -fast): picking the model picks the effort.
+        const models = await this.cursorModels(c.get<string>('cursor.bin') || 'agent');
+        if (!models.length) {
+          void vscode.window.showWarningMessage('Cursor CLI returned no models — run `agent login` in a terminal first.');
+          return;
+        }
+        const pick = await vscode.window.showQuickPick(
+          models.map((m) => ({ label: m.id, description: m.label })),
+          { placeHolder: 'Cursor model (effort and speed are in the name)', matchOnDescription: true },
+        );
+        if (pick) await set('cursor.model', pick.label);
         return;
       }
       case 'vscode-lm': {
@@ -107,6 +117,20 @@ export class SettingsUi implements vscode.Disposable {
         return;
       }
     }
+  }
+
+  private cursorModels(bin: string): Promise<{ id: string; label: string }[]> {
+    return new Promise((resolve) => {
+      execFile(bin, ['--list-models'], { timeout: 20_000 }, (_err, stdout, stderr) => {
+        const text = `${stdout}\n${stderr}`.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+        const out: { id: string; label: string }[] = [];
+        for (const line of text.split('\n')) {
+          const m = line.trim().match(/^([\w.:-]+)\s+-\s+(.+)$/);
+          if (m) out.push({ id: m[1], label: m[2].trim() });
+        }
+        resolve(out);
+      });
+    });
   }
 
   private async ollamaModels(url: string): Promise<string[]> {

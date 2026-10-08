@@ -43,6 +43,7 @@ for (const c of cases) {
     body: JSON.stringify({
       model: MODEL,
       stream: false,
+      think: false, // qwen3-style models: no reasoning preamble
       options: { temperature: 0.2, num_predict: 80 },
       messages: [
         { role: 'system', content: SYSTEM },

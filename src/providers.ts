@@ -24,6 +24,7 @@ export class OllamaProvider implements ChatProvider {
       body: JSON.stringify({
         model: this.opts.model,
         stream: false,
+        think: false, // reasoning models (qwen3…) answer directly
         options: { temperature: 0.2, num_predict: maxTokens },
         messages: [
           { role: 'system', content: system },
@@ -248,7 +249,9 @@ export class CursorCliProvider implements ChatProvider {
     // No system-prompt flag: fold the instructions into the prompt. `--trust` skips the workspace prompt.
     const args = ['-p', '--output-format', 'text', '--trust', ...(this.opts.extraArgs ?? [])];
     if (this.opts.workspace) args.push('--workspace', this.opts.workspace);
-    if (this.opts.model) args.push('--model', this.opts.model);
+    // Tolerate "--model x" pasted into the setting.
+    const model = this.opts.model?.replace(/^--model\s+/, '').trim();
+    if (model) args.push('--model', model);
     args.push(`${system}\n\n---\n\n${user}`);
     return run(this.opts.bin || 'agent', args, undefined, this.opts.workspace);
   }
