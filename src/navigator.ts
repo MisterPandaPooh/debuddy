@@ -23,6 +23,10 @@ export interface Frame {
   index: number;
   /** Why we stepped into this frame (empty for the entry frame). */
   reason: string;
+  /** Error classes thrown directly in this function body (not in nested functions). */
+  throws: string[];
+  /** Position of the function name, for reference lookups; absent for anonymous functions. */
+  namePosition?: vscode.Position;
 }
 
 type FnNode = ts.FunctionLikeDeclaration;
@@ -112,6 +116,22 @@ function collectCalls(n: ts.Node, doc: vscode.TextDocument) {
   return calls;
 }
 
+/** `throw new X()` / `throw X` sites in a function body, excluding nested functions. */
+function collectThrows(body: ts.Node): string[] {
+  const out = new Set<string>();
+  const visit = (n: ts.Node) => {
+    if (ts.isFunctionLike(n)) return;
+    if (ts.isThrowStatement(n)) {
+      const e = n.expression;
+      const id = ts.isNewExpression(e) || ts.isCallExpression(e) ? e.expression : e;
+      out.add(ts.isIdentifier(id) ? id.text : ts.isPropertyAccessExpression(id) ? id.name.text : 'error');
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(body);
+  return [...out];
+}
+
 /** Names bound by `const/let/var` in this statement, including destructuring patterns. */
 function collectDeclared(s: ts.Statement, doc: vscode.TextDocument): Step['declared'] {
   const out: Step['declared'] = [];
@@ -134,6 +154,7 @@ export function frameAt(doc: vscode.TextDocument, line: number, reason = ''): Fr
   if (steps.length === 0) return undefined;
   let index = steps.findIndex((s) => s.line >= line);
   if (index < 0) index = 0;
+  const nameNode = fn.name ?? (ts.isVariableDeclaration(fn.parent) ? fn.parent.name : undefined);
   return {
     uri: doc.uri,
     name: fnName(fn),
@@ -142,6 +163,8 @@ export function frameAt(doc: vscode.TextDocument, line: number, reason = ''): Fr
     steps,
     index,
     reason,
+    throws: collectThrows(fn.body),
+    namePosition: nameNode && ts.isIdentifier(nameNode) ? doc.positionAt(nameNode.getStart()) : undefined,
   };
 }
 
@@ -161,6 +184,38 @@ export async function resolveProjectCallee(
     if (inWorkspace && !loc.uri.fsPath.includes('node_modules') && !loc.uri.fsPath.endsWith('.d.ts')) return loc;
   }
   return undefined;
+}
+
+/** Declaration text of the type behind a variable (interface/type/class), trimmed; project types only. */
+export async function typeDefinitionText(uri: vscode.Uri, position: vscode.Position): Promise<string[]> {
+  const defs = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(
+    'vscode.executeTypeDefinitionProvider',
+    uri,
+    position,
+  );
+  const out: string[] = [];
+  for (const d of (defs ?? []).slice(0, 3)) {
+    const loc = 'targetUri' in d ? new vscode.Location(d.targetUri, d.targetRange) : d;
+    if (loc.uri.fsPath.includes('node_modules') || loc.uri.fsPath.includes('/typescript/lib/')) continue;
+    const doc = await vscode.workspace.openTextDocument(loc.uri);
+    const text = doc.getText(loc.range).split('\n').slice(0, 12).join(' ').replace(/\s+/g, ' ').trim();
+    if (text) out.push(text.slice(0, 240));
+  }
+  return out;
+}
+
+/** Files that reference the symbol at `position`, as "basename:line" (excluding `position` itself). */
+export async function referencesOf(uri: vscode.Uri, position: vscode.Position, limit = 5): Promise<string[]> {
+  const refs = await vscode.commands.executeCommand<vscode.Location[]>('vscode.executeReferenceProvider', uri, position);
+  const out: string[] = [];
+  for (const r of refs ?? []) {
+    if (r.uri.fsPath === uri.fsPath && r.range.start.line === position.line) continue;
+    if (r.uri.fsPath.includes('node_modules')) continue;
+    const name = r.uri.fsPath.split('/').pop();
+    out.push(`${name}:${r.range.start.line + 1}`);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 /** Hover text for a position, flattened to one line. */

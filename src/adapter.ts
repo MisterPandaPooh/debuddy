@@ -12,12 +12,18 @@ import {
   Thread,
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
-import { buildContext, summarizeFrame } from './context';
-import { ExampleValue, Explainer, Explanation, StatementContext } from './explain';
-import { Frame, frameAt, resolveProjectCallee } from './navigator';
+import { ContextSources, buildContext, summarizeFrame } from './context';
+import { ExampleValue, Explanation, StatementContext } from './explain';
+import { Frame, Step, frameAt, referencesOf, resolveProjectCallee } from './navigator';
 import { ExplainUi } from './ui';
 
 const THREAD_ID = 1;
+
+interface Prepared {
+  ctx: StatementContext;
+  explanation: Explanation;
+  values: Promise<ExampleValue[]>;
+}
 const BANNER = '⚠️ _Static walkthrough: nothing is executed. Values are illustrative, branches are read in source order._';
 
 interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
@@ -39,8 +45,10 @@ export class ExplainSession extends DebugSession {
   private history: { stack: Frame[]; indices: number[]; reason: string }[] = [];
   private firstStop = true;
   private explainToken = 0;
+  /** Explanations by statement, so the next step (prefetched) and Step Back are instant. */
+  private prepared = new Map<string, Promise<Prepared>>();
 
-  constructor(private ui: ExplainUi, private explainer: Explainer) {
+  constructor(private ui: ExplainUi, private src: ContextSources) {
     super();
     this.setDebuggerLinesStartAt1(true);
     this.setDebuggerColumnsStartAt1(true);
@@ -138,7 +146,7 @@ export class ExplainSession extends DebugSession {
     const expr = args.expression.trim();
     try {
       if (args.context === 'repl' && this.context) {
-        const text = await this.explainer.answer(this.context, expr);
+        const text = await this.src.explainer.answer(this.context, expr);
         response.body = { result: text, variablesReference: 0 };
       } else {
         const known = this.values.find((x) => x.name === expr);
@@ -324,21 +332,22 @@ export class ExplainSession extends DebugSession {
       }
       if (token !== this.explainToken) return;
       this.ui.showPending(frame.uri, step.line, header);
-      const ctx = await buildContext(frame, step, this.explainer);
+      const { ctx, explanation, values } = await this.prepare(frame, step);
       if (token !== this.explainToken) return;
       this.context = ctx;
-      // Values are a second local call; let them land after the explanation without blocking it.
-      void this.explainer.exampleValues(ctx).then((values) => {
-        if (token !== this.explainToken) return;
-        this.values = values;
-        this.sendEvent(new InvalidatedEvent(['variables'], THREAD_ID));
-      }).catch((err) => this.log(`values: ${err}`));
-      const explanation = await this.explainer.explainStatement(ctx);
-      if (token !== this.explainToken) return;
       this.explanation = explanation;
       const footer = reason === 'end' ? '_End of walk — F5/F10 or Shift+F5 to exit, Shift+F11 to go back up._' : undefined;
-      this.ui.show(frame.uri, step.line, explanation, header, footer);
+      this.ui.show(frame.uri, step.line, explanation, { header, footer, throws: ctx.throws });
       this.sendEvent(new InvalidatedEvent(['variables'], THREAD_ID));
+      // Values are a second local call; let them land after the explanation without blocking it.
+      void values.then((v) => {
+        if (token !== this.explainToken) return;
+        this.values = v;
+        this.sendEvent(new InvalidatedEvent(['variables'], THREAD_ID));
+      }).catch((err) => this.log(`values: ${err}`));
+      // Warm the next statement while the user reads this one; local inference is free.
+      const next = this.peekNext();
+      if (next) void this.prepare(next.frame, next.step).catch(() => undefined);
     } catch (err) {
       if (token === this.explainToken) this.ui.showError(frame.uri, step.line, err);
     }
@@ -346,7 +355,37 @@ export class ExplainSession extends DebugSession {
 
   private async frameHeader(frame: Frame): Promise<string> {
     const depth = vscode.workspace.getConfiguration('explain.context').get<number>('definitionDepth', 2);
-    const summary = await summarizeFrame(frame, this.explainer, depth);
-    return `↳ **${frame.name}()** — ${summary}`;
+    const [summary, callers] = await Promise.all([
+      summarizeFrame(frame, this.src, depth),
+      frame.namePosition ? referencesOf(frame.uri, frame.namePosition) : Promise.resolve([]),
+    ]);
+    const from = callers.length ? `\n\n_Called from: ${callers.join(', ')}_` : '';
+    return `↳ **${frame.name}()** — ${summary}${from}`;
+  }
+
+  /** Context + explanation + (pending) values for a statement, computed once per statement text. */
+  private prepare(frame: Frame, step: Step): Promise<Prepared> {
+    const key = `${frame.uri.fsPath}:${step.line}:${step.text}:${frame.source.length}`;
+    let p = this.prepared.get(key);
+    if (!p) {
+      p = (async () => {
+        const ctx = await buildContext(frame, step, this.src);
+        const explanation = await this.src.explainer.explainStatement(ctx);
+        const values = this.src.explainer.exampleValues(ctx);
+        return { ctx, explanation, values };
+      })();
+      p.catch(() => this.prepared.delete(key));
+      this.prepared.set(key, p);
+    }
+    return p;
+  }
+
+  /** Where Step Over would land, without moving. */
+  private peekNext(): { frame: Frame; step: Step } | undefined {
+    for (let i = this.stack.length - 1; i >= 0; i--) {
+      const f = this.stack[i];
+      if (f.index + 1 < f.steps.length) return { frame: f, step: f.steps[f.index + 1] };
+    }
+    return undefined;
   }
 }

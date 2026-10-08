@@ -14,5 +14,5 @@ function openTextDocument(p) {
 module.exports = {
   Position, Uri, Range: class {}, Location: class {},
   commands: { executeCommand: async () => [] },
-  workspace: { openTextDocument, getWorkspaceFolder: () => ({}) },
+  workspace: { getConfiguration: () => ({ get: (_k, d) => d }), openTextDocument, getWorkspaceFolder: () => ({}), findFiles: async () => [], fs: { readFile: async () => new Uint8Array() } },
 };

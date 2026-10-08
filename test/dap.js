@@ -15,7 +15,7 @@ const ui = {
   showPending: () => {}, show: (u, l, e, h, f) => console.log(`   ui.show L${l}`, e.does, f ?? ''), showError: (u, l, e) => console.log('   ui.error', e), clear: () => {},
 };
 
-const session = new ExplainSession(ui, explainer);
+const session = new ExplainSession(ui, { explainer, tests: { titlesFor: async () => ['getRoles › returns [] when no doc'] } });
 session.sendEvent = (e) => console.log(`   → event ${e.event}`, e.body ? JSON.stringify(e.body) : '');
 session.sendResponse = (r) => console.log(`   → response ${r.command}`, r.body ? JSON.stringify(r.body).slice(0, 120) : '');
 session.sendErrorResponse = (r, code, msg) => console.log(`   → ERROR ${r.command}: ${msg}`);

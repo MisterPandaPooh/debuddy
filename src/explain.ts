@@ -22,6 +22,10 @@ export interface StatementContext {
   hovers: string[];
   /** Variables declared by the statement, each as "name: type". */
   vars: string[];
+  /** Errors the called project functions can throw, as "Name (from fn)". Deterministic. */
+  throws: string[];
+  /** Test titles that describe the enclosing function. Deterministic. */
+  tests: string[];
   reason: string;
 }
 
@@ -138,6 +142,8 @@ function contextPrompt(ctx: StatementContext): string {
   const parts = [`Enclosing function:\n${ctx.enclosing}`, `Current statement:\n${ctx.statement}`];
   if (ctx.callees.length) parts.push(`Known functions:\n${ctx.callees.join('\n')}`);
   if (ctx.hovers.length) parts.push(`Hover info:\n${ctx.hovers.join('\n')}`);
+  if (ctx.throws.length) parts.push(`May throw: ${ctx.throws.join(', ')}`);
+  if (ctx.tests.length) parts.push(`Tests describing the enclosing function:\n${ctx.tests.map((t) => '- ' + t).join('\n')}`);
   if (ctx.reason) parts.push(`Context: ${ctx.reason}`);
   return parts.join('\n\n');
 }

@@ -1,17 +1,18 @@
 import * as vscode from 'vscode';
 import { ExplainSession } from './adapter';
 import { OllamaExplainer } from './explain';
+import { TestIndex } from './tests';
 import { ExplainUi } from './ui';
 
 export function activate(context: vscode.ExtensionContext) {
   const ui = new ExplainUi();
-  const explainer = new OllamaExplainer();
+  const src = { explainer: new OllamaExplainer(), tests: new TestIndex() };
 
   context.subscriptions.push(
     ui,
     vscode.debug.registerDebugAdapterDescriptorFactory('explain', {
       createDebugAdapterDescriptor: () =>
-        new vscode.DebugAdapterInlineImplementation(new ExplainSession(ui, explainer)),
+        new vscode.DebugAdapterInlineImplementation(new ExplainSession(ui, src)),
     }),
     // Lets a bare `{ "type": "explain" }` launch config start from the cursor.
     vscode.debug.registerDebugConfigurationProvider('explain', {

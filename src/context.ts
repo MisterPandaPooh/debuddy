@@ -1,16 +1,24 @@
 import * as vscode from 'vscode';
 import { Explainer, StatementContext } from './explain';
-import { Frame, Step, frameAt, hoverText, resolveProjectCallee } from './navigator';
+import { Frame, Step, frameAt, hoverText, resolveProjectCallee, typeDefinitionText } from './navigator';
+import { TestIndex } from './tests';
 
 const STDLIB = /^(console|Math|JSON|Object|Array|Promise|String|Number|Date|Map|Set|parseInt|parseFloat|fetch|setTimeout)\b/;
+
+/** Everything deterministic the context builder needs besides the LSP. */
+export interface ContextSources {
+  explainer: Explainer;
+  tests: TestIndex;
+}
 
 /**
  * Build the minimal context for one statement: only resolve what is opaque.
  * Explicit lines get the enclosing function and nothing else.
  */
-export async function buildContext(frame: Frame, step: Step, explainer: Explainer): Promise<StatementContext> {
+export async function buildContext(frame: Frame, step: Step, src: ContextSources): Promise<StatementContext> {
   const callees: string[] = [];
   const hovers: string[] = [];
+  const throws: string[] = [];
 
   for (const call of step.calls) {
     if (STDLIB.test(call.name)) continue;
@@ -20,8 +28,9 @@ export async function buildContext(frame: Frame, step: Step, explainer: Explaine
       const target = await vscode.workspace.openTextDocument(loc.uri);
       const callee = frameAt(target, loc.range.start.line + 1);
       if (callee) {
-        const summary = await summarizeFrame(callee, explainer, definitionDepth() - 1);
+        const summary = await summarizeFrame(callee, src, definitionDepth() - 1);
         callees.push(`${call.name}: ${summary}`);
+        throws.push(...callee.throws.map((t) => `${t} (from ${call.name})`));
         continue;
       }
     }
@@ -32,11 +41,13 @@ export async function buildContext(frame: Frame, step: Step, explainer: Explaine
     }
   }
 
-  // Types of the variables this statement declares drive the example values.
+  // Types of the variables this statement declares drive the example values; expand project types.
   const vars: string[] = [];
   for (const d of step.declared) {
     const h = await hoverText(frame.uri, d.position);
-    vars.push(`${d.name}: ${h?.replace(/^\(?(const|let|var)\)?\s*[\w$]+:\s*/, '') ?? 'unknown'}`);
+    const type = h?.replace(/^\(?(const|let|var)\)?\s*[\w$]+:\s*/, '') ?? 'unknown';
+    const expanded = await typeDefinitionText(frame.uri, d.position);
+    vars.push(`${d.name}: ${type}${expanded.length ? ' — ' + expanded.join(' ; ') : ''}`);
   }
 
   return {
@@ -45,6 +56,8 @@ export async function buildContext(frame: Frame, step: Step, explainer: Explaine
     callees,
     hovers,
     vars,
+    throws,
+    tests: await src.tests.titlesFor(frame.name),
     reason: frame.reason,
   };
 }
@@ -56,11 +69,12 @@ function definitionDepth(): number {
 
 /**
  * One-line summary of a function, informed by the summaries of its own project callees
- * down to `depth` levels. Without those hints a small model invents behaviour.
+ * down to `depth` levels, its throw sites and the tests that describe it.
+ * Without those facts a small model invents behaviour.
  */
 export async function summarizeFrame(
   frame: Frame,
-  explainer: Explainer,
+  src: ContextSources,
   depth: number,
   visited = new Set<string>(),
 ): Promise<string> {
@@ -77,12 +91,15 @@ export async function summarizeFrame(
         const doc = await vscode.workspace.openTextDocument(loc.uri);
         const callee = frameAt(doc, loc.range.start.line + 1);
         if (!callee || visited.has(`${callee.uri.fsPath}:${callee.startLine}`)) return undefined;
-        return `${call.name}: ${await summarizeFrame(callee, explainer, depth - 1, visited)}`;
+        return `${call.name}: ${await summarizeFrame(callee, src, depth - 1, visited)}`;
       }),
     );
     hints.push(...results.filter((r): r is string => !!r));
   }
-  return explainer.summarizeFunction(frame.source, frame.reason, hints);
+  if (frame.throws.length) hints.push(`throws: ${frame.throws.join(', ')}`);
+  const tests = await src.tests.titlesFor(frame.name, 4);
+  if (tests.length) hints.push(`tests: ${tests.join(' / ')}`);
+  return src.explainer.summarizeFunction(frame.source, frame.reason, hints);
 }
 
 /**
