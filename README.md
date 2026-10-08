@@ -25,6 +25,11 @@ Settings live under `explain.*` (provider, context window, definition depth, aut
 | `claude-cli` | Claude Code CLI signed in (subscription or API key) | ~4 s | one persistent `stream-json` session (`explain.claude.persistentSession`); the CLI is an agent harness, so it never gets as fast as a chat API |
 | `cursor-cli` | Cursor Agent CLI, `agent login` once | ? | reuses the Cursor subscription; no system-prompt flag, instructions are folded into the prompt |
 
+On seconds-per-call providers (`claude-cli`, `cursor-cli`) the extension makes **one call per
+function** (`explain.batchPerFunction: auto`): the function, its resolved callees, types, tests
+and throw sites are sent once, and every statement, the summary and the example values are
+cached from that single answer. Fast local models keep one call per statement.
+
 Cursor runs the extension unchanged. Cursor does not expose its models to extensions, but its
 Agent CLI does: `cursor-cli` is the way to use the Cursor subscription. On slow providers set
 `explain.exampleValues: false` to save one call per statement.
