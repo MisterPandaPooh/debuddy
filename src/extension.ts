@@ -28,6 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
   void setActive(vscode.debug.activeDebugSession?.type === 'explain');
 
   const settingsUi = new SettingsUi(context.globalStorageUri.fsPath);
+  const sessions = new Set<ExplainSession>();
   context.subscriptions.push(
     ui,
     settingsUi,
@@ -36,11 +37,13 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.debug.onDidTerminateDebugSession(() => setActive(vscode.debug.activeDebugSession?.type === 'explain')),
     vscode.debug.registerDebugAdapterDescriptorFactory('explain', {
       createDebugAdapterDescriptor: () => {
-        const session = new ExplainSession(ui, src);
-        const sub = vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('explain') && session.invalidate());
-        context.subscriptions.push(sub);
+        const session: ExplainSession = new ExplainSession(ui, src, () => sessions.delete(session));
+        sessions.add(session);
         return new vscode.DebugAdapterInlineImplementation(session);
       },
+    }),
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('explain')) for (const s of sessions) s.invalidate();
     }),
     // Lets a bare `{ "type": "explain" }` launch config start from the cursor.
     vscode.debug.registerDebugConfigurationProvider('explain', {

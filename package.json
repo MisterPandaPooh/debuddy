@@ -262,7 +262,8 @@
             "Claude Code CLI, reusing your Claude login (subscription or key). A persistent session keeps it at ~4 s per call (explain.claude.*).",
             "Cursor Agent CLI (`agent -p`), reusing your Cursor subscription; run `agent login` once (explain.cursor.*)."
           ],
-          "description": "Model used for every step."
+          "description": "Model used for every step.",
+          "scope": "machine"
         },
         "explain.language": {
           "type": "string",
@@ -271,11 +272,13 @@
         },
         "explain.ollamaUrl": {
           "type": "string",
-          "default": "http://localhost:11434"
+          "default": "http://localhost:11434",
+          "scope": "machine"
         },
         "explain.model": {
           "type": "string",
-          "default": "qwen2.5-coder:3b"
+          "default": "qwen2.5-coder:3b",
+          "scope": "machine"
         },
         "explain.context.fullFunctionMaxLines": {
           "type": "number",
@@ -315,47 +318,56 @@
         "explain.openai.baseUrl": {
           "type": "string",
           "default": "https://openrouter.ai/api/v1",
-          "description": "Base URL of the OpenAI-compatible API (\u2026/v1)."
+          "description": "Base URL of the OpenAI-compatible API (\u2026/v1).",
+          "scope": "machine"
         },
         "explain.openai.model": {
           "type": "string",
           "default": "anthropic/claude-haiku-4.5",
-          "description": "Model id for the OpenAI-compatible provider."
+          "description": "Model id for the OpenAI-compatible provider.",
+          "scope": "machine"
         },
         "explain.vscodeLm.vendor": {
           "type": "string",
           "default": "",
-          "description": "Vendor filter for vscode.lm (e.g. copilot). Empty = any."
+          "description": "Vendor filter for vscode.lm (e.g. copilot). Empty = any.",
+          "scope": "machine"
         },
         "explain.vscodeLm.family": {
           "type": "string",
           "default": "",
-          "description": "Model family filter for vscode.lm (e.g. gpt-4o-mini, claude-3.5-sonnet). Empty = first available."
+          "description": "Model family filter for vscode.lm (e.g. gpt-4o-mini, claude-3.5-sonnet). Empty = first available.",
+          "scope": "machine"
         },
         "explain.claude.model": {
           "type": "string",
           "default": "",
-          "description": "Model for the Claude CLI (--model), e.g. haiku, sonnet. Empty = CLI default."
+          "description": "Model for the Claude CLI (--model), e.g. haiku, sonnet. Empty = CLI default.",
+          "scope": "machine"
         },
         "explain.claude.bin": {
           "type": "string",
           "default": "",
-          "description": "Path to the claude executable if not on PATH."
+          "description": "Path to the claude executable if not on PATH.",
+          "scope": "machine"
         },
         "explain.claude.persistentSession": {
           "type": "boolean",
           "default": true,
-          "description": "Keep one claude process alive and send each call as a turn (~4 s) instead of starting a process per call (~10 s). Recycled every 30 turns."
+          "description": "Keep one claude process alive and send each call as a turn (~4 s) instead of starting a process per call (~10 s). Recycled every 30 turns.",
+          "scope": "machine"
         },
         "explain.cursor.model": {
           "type": "string",
           "default": "",
-          "description": "Model for the Cursor Agent CLI (--model). Empty = account default."
+          "description": "Model for the Cursor Agent CLI (--model). Empty = account default.",
+          "scope": "machine"
         },
         "explain.cursor.bin": {
           "type": "string",
           "default": "",
-          "description": "Path to the Cursor `agent` executable if not on PATH."
+          "description": "Path to the Cursor `agent` executable if not on PATH.",
+          "scope": "machine"
         },
         "explain.exampleValues": {
           "type": "boolean",
@@ -370,7 +382,8 @@
         "explain.claude.sessions": {
           "type": "number",
           "default": 3,
-          "description": "Persistent claude processes kept in parallel; more = more prefetch throughput, more memory."
+          "description": "Persistent claude processes kept in parallel; more = more prefetch throughput, more memory.",
+          "scope": "machine"
         },
         "explain.claude.effort": {
           "type": "string",
@@ -381,7 +394,8 @@
             "high"
           ],
           "default": "low",
-          "description": "--effort passed to the Claude CLI. 'low' is 3x faster on long answers (measured: 300 words in 16 s vs 50 s) with no visible loss on explanations. Empty = CLI default."
+          "description": "--effort passed to the Claude CLI. 'low' is 3x faster on long answers (measured: 300 words in 16 s vs 50 s) with no visible loss on explanations. Empty = CLI default.",
+          "scope": "machine"
         },
         "explain.claude.extraArgs": {
           "type": "array",
@@ -389,7 +403,8 @@
             "type": "string"
           },
           "default": [],
-          "description": "Extra flags for the claude CLI, e.g. [\"--max-budget-usd\", \"1\"]."
+          "description": "Extra flags for the claude CLI, e.g. [\"--max-budget-usd\", \"1\"].",
+          "scope": "machine"
         },
         "explain.cursor.extraArgs": {
           "type": "array",
@@ -397,7 +412,8 @@
             "type": "string"
           },
           "default": [],
-          "description": "Extra flags for the Cursor agent CLI, e.g. [\"--mode\", \"ask\"]."
+          "description": "Extra flags for the Cursor agent CLI, e.g. [\"--mode\", \"ask\"].",
+          "scope": "machine"
         },
         "explain.claude.auth": {
           "type": "string",
@@ -410,7 +426,8 @@
             "Use the Claude Code login only (Pro/Max usage). API-key variables are hidden from the claude process so it can never bill per token.",
             "Let the claude process see your environment as is (an ANTHROPIC_API_KEY there would be used and billed)."
           ],
-          "description": "How the Claude CLI authenticates."
+          "description": "How the Claude CLI authenticates.",
+          "scope": "machine"
         },
         "explain.batchPerFunction": {
           "type": "string",
@@ -430,7 +447,8 @@
         "explain.embedded.model": {
           "type": "string",
           "default": "hf:Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/qwen2.5-coder-3b-instruct-q4_k_m.gguf",
-          "description": "Advanced: GGUF for the embedded provider, as hf:<owner>/<repo>/<file.gguf>. The default is the measured sweet spot; for other sizes use Ollama."
+          "description": "Advanced: GGUF for the embedded provider, as hf:<owner>/<repo>/<file.gguf>. The default is the measured sweet spot; for other sizes use Ollama.",
+          "scope": "machine"
         }
       }
     }
@@ -442,7 +460,7 @@
     "bench": "node bench/bench.mjs",
     "test:dap": "esbuild src/adapter.ts --bundle --platform=node --format=cjs --outfile=test/adapter.bundle.js --alias:vscode=./test/vscode-stub.js && node test/dap.js",
     "test:dap:auto": "EXPLAIN_AUTO=1 npm run test:dap",
-    "test:dap:throw": "npm run test:dap >/dev/null && EXPLAIN_SCENARIO=throw node test/dap.js test/fixtures/throwflow.ts 3 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 13 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 10",
+    "test:dap:throw": "npm run test:dap >/dev/null && EXPLAIN_SCENARIO=throw node test/dap.js test/fixtures/throwflow.ts 3 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 13 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 10 && EXPLAIN_SCENARIO=stepin-continue node test/dap.js test/fixtures/throwflow.ts 3",
     "test:dap:batch": "EXPLAIN_SLOW=1 npm run test:dap",
     "test:lang": "esbuild src/lang/index.ts --bundle --platform=node --format=cjs --external:web-tree-sitter --outfile=test/lang.bundle.js --alias:vscode=./test/vscode-stub.js && node scripts/copy-grammars.js && node test/lang.js"
   },

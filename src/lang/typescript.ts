@@ -5,7 +5,7 @@ import { Frame, LanguageSupport, Step } from './types';
 type FnNode = ts.FunctionLikeDeclaration;
 
 function parse(doc: vscode.TextDocument): ts.SourceFile {
-  const kind = doc.languageId === 'typescript' ? ts.ScriptKind.TS : ts.ScriptKind.JS;
+  const kind = { typescript: ts.ScriptKind.TS, typescriptreact: ts.ScriptKind.TSX, javascriptreact: ts.ScriptKind.JSX }[doc.languageId] ?? ts.ScriptKind.JS;
   return ts.createSourceFile(doc.fileName, doc.getText(), ts.ScriptTarget.Latest, true, kind);
 }
 
@@ -73,12 +73,15 @@ function collectSteps(sf: ts.SourceFile, body: ts.Node, doc: vscode.TextDocument
       const head = headNode(n, doc);
       const start = doc.positionAt(head.getStart());
       const end = doc.positionAt(head.getEnd());
+      // `} else if (…) {` shares a line with the end of `then`: that line belongs to the else side.
+      const elseLine = ts.isIfStatement(n) && n.elseStatement ? lineOf(n.elseStatement.getStart()) : undefined;
+      const thenTo = ts.isIfStatement(n) ? lineOf(n.thenStatement.getEnd()) : 0;
       const branches =
         ts.isIfStatement(n) && head !== n
           ? [
-              { label: 'then', from: lineOf(n.thenStatement.getStart()), to: lineOf(n.thenStatement.getEnd()) },
-              ...(n.elseStatement
-                ? [{ label: 'else', from: lineOf(n.elseStatement.getStart()), to: lineOf(n.elseStatement.getEnd()) }]
+              { label: 'then', from: lineOf(n.thenStatement.getStart()), to: elseLine !== undefined && elseLine <= thenTo ? elseLine - 1 : thenTo },
+              ...(n.elseStatement && elseLine !== undefined
+                ? [{ label: 'else', from: elseLine, to: lineOf(n.elseStatement.getEnd()) }]
                 : []),
             ]
           : undefined;

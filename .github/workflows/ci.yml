@@ -36,8 +36,9 @@ jobs:
         include:
           - os: macos-14
             target: darwin-arm64
-          - os: macos-13
+          - os: macos-14
             target: darwin-x64
+            npm_flags: --cpu x64 --os darwin
           - os: ubuntu-latest
             target: linux-x64
           - os: windows-latest
@@ -50,7 +51,7 @@ jobs:
           node-version: 22
           cache: npm
       # Installs this platform's llama.cpp binary only; the VSIX is therefore per target.
-      - run: npm ci
+      - run: npm ci ${{ matrix.npm_flags }}
       - run: npm run build
       - run: npx @vscode/vsce package --target ${{ matrix.target }} --out explain-mode-${{ matrix.target }}.vsix
       - uses: actions/upload-artifact@v4

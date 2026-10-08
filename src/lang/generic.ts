@@ -13,7 +13,8 @@ export const genericLanguage: LanguageSupport = {
     for (let l = 0; l < doc.lineCount; l++) {
       const text = doc.lineAt(l).text;
       const m = text.match(re);
-      if (m && !/^\s*(if|while|for|switch|return|else)\b/.test(text) && /[{:=]\s*$|\)\s*(->|:|\{)?\s*$/.test(text)) {
+      // A definition line opens a body (`{` or `:`); a bare call line `foo(x)` does not.
+      if (m && !/^\s*(if|while|for|switch|return|else)\b/.test(text) && /[{:]\s*$/.test(text)) {
         const col = m.index! + m[0].lastIndexOf(m[1]);
         return new vscode.Location(doc.uri, new vscode.Range(new vscode.Position(l, col), new vscode.Position(l, col + m[1].length)));
       }

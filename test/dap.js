@@ -40,6 +40,12 @@ const tick = () => new Promise((r) => setTimeout(r, 50));
   send('configurationDone');
   await tick();
   if (SCENARIO === 'throw') { send('followThrow', {}); await tick(); send('stackTrace', { threadId: 1 }); return; }
+  if (SCENARIO === 'stepin-continue') {
+    // Entry function's last statement is a call: step into it, then Continue must end cleanly (no crash, no hang).
+    send('stepIn', { threadId: 1 }); await tick();
+    send('continue', { threadId: 1 }); await tick(); await tick();
+    return;
+  }
   if (SCENARIO === 'next') { send('next', { threadId: 1 }); await tick(); send('next', { threadId: 1 }); await tick(); send('stackTrace', { threadId: 1 }); return; }
   send('continue', { threadId: 1 });
   await tick();

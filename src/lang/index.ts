@@ -7,7 +7,7 @@ import { setGrammarDir, treeSitterLanguage } from './treesitter';
 import { Frame, LanguageSupport } from './types';
 import { typescriptLanguage } from './typescript';
 
-import { lspProjectCallee } from './lsp';
+import { lspKnowsSymbol, lspProjectCallee } from './lsp';
 import { CallSite } from './types';
 
 export * from './lsp';
@@ -23,6 +23,8 @@ const fallbackCache = new Map<string, Promise<vscode.Location | undefined>>();
 export async function resolveProjectCallee(uri: vscode.Uri, call: CallSite): Promise<vscode.Location | undefined> {
   const viaLsp = await lspProjectCallee(uri, call);
   if (viaLsp) return viaLsp;
+  // The server resolved it to a library (.d.ts, node_modules…): a same-named local function is not it.
+  if (await lspKnowsSymbol(uri, call.position)) return undefined;
   const doc = await vscode.workspace.openTextDocument(uri);
   const lang = languageFor(doc);
   if (!lang.findFunction) return undefined;

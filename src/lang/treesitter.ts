@@ -30,7 +30,7 @@ export interface TreeSitterProfile {
   /** Nodes that *may* raise without being a raise statement themselves (rust `?`). */
   mayThrowTypes?: Record<string, (n: Node) => string | undefined>;
   /** try/except shape, when the language has one. */
-  tryType?: { type: string; body: string; handler: string; finally?: string };
+  tryType?: { type: string; body: string; handler: string; finally?: string; else?: string };
 }
 
 export interface CompoundSpec {
@@ -201,6 +201,12 @@ function collectSteps(p: TreeSitterProfile, body: Node, doc: vscode.TextDocument
         push(lineOf(c), lineOf(c), headText(c, cb), c.namedChildren.filter((x) => !p.blockTypes.includes(x.type)));
         if (cb) visitBlock(cb);
       }
+      const els = p.tryType.else ? n.namedChildren.find((c) => c.type === p.tryType!.else) : undefined;
+      if (els) {
+        const eb = els.namedChildren.find((x) => p.blockTypes.includes(x.type));
+        push(lineOf(els), lineOf(els), 'else (no exception)', []);
+        if (eb) visitBlock(eb);
+      }
       if (fin) {
         const fb = fin.namedChildren.find((x) => p.blockTypes.includes(x.type));
         push(lineOf(fin), lineOf(fin), 'finally', []);
@@ -219,7 +225,8 @@ function collectSteps(p: TreeSitterProfile, body: Node, doc: vscode.TextDocument
       const text = headNode ? headNode.text : headText(n, firstBody);
       const branches: Branch[] | undefined = spec.branching
         ? [
-            ...bodies.map((b) => ({ label: 'then', from: lineOf(b), to: endLineOf(b) })),
+            // the line where `then` ends and the next clause starts belongs to that clause
+            ...bodies.map((b) => ({ label: 'then', from: lineOf(b), to: clauses[0] && lineOf(clauses[0]) <= endLineOf(b) ? lineOf(clauses[0]) - 1 : endLineOf(b) })),
             ...clauses.map((c) => ({ label: clauseLabel(headText(c, c.namedChildren.find((x) => p.blockTypes.includes(x.type)))) || c.type, from: lineOf(c), to: endLineOf(c) })),
           ]
         : undefined;
@@ -233,6 +240,11 @@ function collectSteps(p: TreeSitterProfile, body: Node, doc: vscode.TextDocument
         // `else` on its own line is not worth a stop; `elif x` / `Err(e) =>` are.
         if (cb && inner.length === 0 && c.type.startsWith('else')) {
           visitBlock(cb);
+          continue;
+        }
+        // `else if …`: the nested compound is the step, not the clause wrapping it.
+        if (!cb && inner.some((x) => p.compound[x.type])) {
+          for (const x of inner) visitStatement(x);
           continue;
         }
         push(lineOf(c), lineOf(c), headText(c, cb), inner);

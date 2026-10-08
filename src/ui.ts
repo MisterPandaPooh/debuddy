@@ -122,7 +122,7 @@ export class ExplainUi implements vscode.Disposable {
     if (!c || !this.thread) return;
     const body = typeof c.body === 'string' ? c.body : c.body.value;
     if (!body.includes(placeholder)) return;
-    this.thread.comments = [{ ...c, body: new vscode.MarkdownString(body.replace(placeholder, text)) }];
+    this.thread.comments = [{ ...c, body: new vscode.MarkdownString(body.replace(placeholder, () => text)) }];
   }
 
   showError(uri: vscode.Uri, line: number, err: unknown) {

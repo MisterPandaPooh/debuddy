@@ -28,5 +28,5 @@ export const pythonProfile: TreeSitterProfile = {
   callTypes: { call: 'function' },
   declTypes: { assignment: 'left', augmented_assignment: 'left', for_statement: 'left', as_pattern: 'alias', named_expression: 'name' },
   throwTypes: { raise_statement: raised },
-  tryType: { type: 'try_statement', body: 'body', handler: 'except_clause', finally: 'finally_clause' },
+  tryType: { type: 'try_statement', body: 'body', handler: 'except_clause', finally: 'finally_clause', else: 'else_clause' },
 };

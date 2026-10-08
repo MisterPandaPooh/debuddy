@@ -16,13 +16,22 @@ function loadLlamaCpp(): Promise<Llama> {
   return new Function('return import("node-llama-cpp")')() as Promise<Llama>;
 }
 
+const HF_ID = /^hf:([\w.-]+)\/([\w.-]+)\/([\w.-]+\.gguf)$/;
+
+/** Only `hf:owner/repo/file.gguf` with plain names: no paths, no revisions, nothing that could escape `dir`. */
+export function isValidEmbeddedId(id: string): boolean {
+  return HF_ID.test(id);
+}
+
 /** Local file a `hf:owner/repo/file.gguf` id resolves to inside `dir`, mirroring node-llama-cpp's naming. */
 export function embeddedModelPath(dir: string, id: string): string {
-  const m = id.match(/^hf:([^/]+)\/[^/]+\/(.+)$/);
-  return path.join(dir, m ? `hf_${m[1]}_${m[2]}` : id.replace(/[^\w.-]+/g, '_'));
+  const m = id.match(HF_ID);
+  if (!m) throw new Error(`invalid embedded model id: ${id} (expected hf:owner/repo/file.gguf)`);
+  return path.join(dir, path.basename(`hf_${m[1]}_${m[3]}`));
 }
 
 export function isEmbeddedModelDownloaded(dir: string, id: string): boolean {
+  if (!isValidEmbeddedId(id)) return false;
   try {
     return fs.statSync(embeddedModelPath(dir, id)).size > 1e6;
   } catch {
@@ -47,8 +56,15 @@ export async function confirmEmbeddedDownload(id: string): Promise<boolean> {
 }
 
 /** Download a GGUF into `dir` with a cancellable progress notification. Resolves to the file path. */
+const declined = new Set<string>();
+
 export async function downloadEmbeddedModel(dir: string, id: string): Promise<string | undefined> {
-  if (!(await confirmEmbeddedDownload(id))) return undefined;
+  if (!isValidEmbeddedId(id)) throw new Error(`invalid embedded model id: ${id}`);
+  if (declined.has(id)) return undefined; // asked once this session: do not nag on every statement
+  if (!(await confirmEmbeddedDownload(id))) {
+    declined.add(id);
+    return undefined;
+  }
   const { createModelDownloader } = await loadLlamaCpp();
   return vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: `Explain Mode: downloading ${id.split('/').pop()}`, cancellable: true },
@@ -83,7 +99,7 @@ export async function downloadEmbeddedModel(dir: string, id: string): Promise<st
  */
 export class EmbeddedProvider implements ChatProvider, vscode.Disposable {
   readonly name: string;
-  private ready?: Promise<{ llama: Llama; context: import('node-llama-cpp').LlamaContext; free: import('node-llama-cpp').LlamaContextSequence[] }>;
+  private ready?: Promise<{ llama: Llama; model: import('node-llama-cpp').LlamaModel; context: import('node-llama-cpp').LlamaContext; free: import('node-llama-cpp').LlamaContextSequence[] }>;
   private waiters: (() => void)[] = [];
 
   constructor(private dir: string, private id: string, private sequences = 2) {
@@ -101,7 +117,7 @@ export class EmbeddedProvider implements ChatProvider, vscode.Disposable {
       const model = await engine.loadModel({ modelPath: embeddedModelPath(this.dir, this.id) });
       const context = await model.createContext({ contextSize: 4096, sequences: this.sequences });
       const free = Array.from({ length: this.sequences }, (_, i) => context.getSequence());
-      return { llama, context, free };
+      return { llama, model, context, free };
     })();
     this.ready.catch(() => (this.ready = undefined));
     return this.ready;
@@ -128,7 +144,10 @@ export class EmbeddedProvider implements ChatProvider, vscode.Disposable {
   }
 
   dispose() {
-    void this.ready?.then((r) => r.context.dispose()).catch(() => undefined);
+    void this.ready?.then(async (r) => {
+      await r.context.dispose();
+      await r.model.dispose();
+    }).catch(() => undefined);
     this.ready = undefined;
   }
 }

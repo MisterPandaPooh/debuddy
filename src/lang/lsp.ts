@@ -21,6 +21,12 @@ export async function lspProjectCallee(
   return undefined;
 }
 
+/** Whether the language server knows *any* definition for the symbol (project or library). */
+export async function lspKnowsSymbol(uri: vscode.Uri, position: vscode.Position): Promise<boolean> {
+  const defs = await vscode.commands.executeCommand<unknown[]>('vscode.executeDefinitionProvider', uri, position);
+  return (defs?.length ?? 0) > 0;
+}
+
 /** Declaration text of the type behind a variable (interface/type/class), trimmed; project types only. */
 export async function typeDefinitionText(uri: vscode.Uri, position: vscode.Position): Promise<string[]> {
   const defs = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(

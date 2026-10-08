@@ -52,7 +52,12 @@ class ClaudeSession {
       if (!this.child || this.turns >= (this.opts.maxTurns ?? 30)) this.respawn();
       this.turns++;
       return await new Promise<string>((resolve, reject) => {
-        const timer = setTimeout(() => this.fail(new Error('claude session: no answer after 120 s')), 120_000);
+        const timer = setTimeout(() => {
+          // A late answer must never reach the next caller: the process goes with the turn.
+          this.child?.kill();
+          this.child = undefined;
+          this.fail(new Error('claude session: no answer after 120 s'));
+        }, 120_000);
         this.pending = {
           resolve: (s) => (clearTimeout(timer), resolve(s)),
           reject: (e) => (clearTimeout(timer), reject(e)),
@@ -74,12 +79,16 @@ class ClaudeSession {
     if (this.opts.model) args.push('--model', this.opts.model);
     const child = spawn(this.opts.bin || 'claude', args, { stdio: ['pipe', 'pipe', 'pipe'], env: claudeEnv(this.opts.auth) });
     this.child = child;
-    child.stdout!.on('data', (d) => this.onData(String(d)));
+    child.stdout!.on('data', (d) => {
+      if (this.child === child) this.onData(String(d));
+    });
+    child.stdin!.on('error', () => undefined); // EPIPE when the process dies mid-write: reported by 'close\'
     let err = '';
     child.stderr!.on('data', (d) => (err += d));
     child.on('error', (e) => this.fail(e));
     child.on('close', (code) => {
-      if (this.child === child) this.child = undefined;
+      if (this.child !== child) return; // a process we replaced on purpose (recycle, timeout)
+      this.child = undefined;
       this.fail(new Error(loginHint(`claude session exited ${code}: ${err.slice(0, 200)}`)));
     });
   }

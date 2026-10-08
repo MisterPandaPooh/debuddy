@@ -152,7 +152,7 @@ export class PromptExplainer implements Explainer {
   }
 
   summarizeFunction(source: string, reason: string, hints: string[] = []): Promise<string> {
-    const key = this.provider().name + '\n' + source + '\n' + hints.join('\n'); // per provider and exact text
+    const key = [this.provider().name, this.language(), source, ...hints].join('\n'); // per provider, language and exact text
     let p = this.summaries.get(key);
     if (!p) {
       const known = hints.length ? `Known functions:\n${hints.join('\n')}\n\n` : '';
@@ -161,6 +161,7 @@ Summarize what it does in one sentence of at most 25 words. Mention fallbacks or
 
 ${known}${source}`;
       p = this.chat('You summarize source code tersely for a developer.', prompt, 60).then((s) => s.trim());
+      p.catch(() => this.summaries.delete(key)); // a failed call (provider down) must retry next time
       this.summaries.set(key, p);
     }
     return p;

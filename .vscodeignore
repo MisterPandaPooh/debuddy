@@ -17,3 +17,6 @@ node_modules/tree-sitter-rust/**
 node_modules/@types/**
 # Everything else under node_modules is a production dependency of node-llama-cpp / web-tree-sitter
 # and ships as is; npm installs only this platform's @node-llama-cpp binary.
+# GPU variants are hundreds of MB and only useful with that driver; the default binary falls back to CPU/Metal.
+node_modules/@node-llama-cpp/*cuda*/**
+node_modules/@node-llama-cpp/*vulkan*/**

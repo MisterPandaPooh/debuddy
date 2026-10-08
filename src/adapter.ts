@@ -16,10 +16,17 @@ import {
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { ContextSources, buildContext, buildFunctionContext, stepThrows, summarizeFrame } from './context';
 import { ExampleValue, Explanation, StatementContext } from './explain';
-import { Frame, Step, calleeFrame, frameAt, hoverText, referencesOf, stepIntoReason } from './lang';
+import { Branch, Frame, Step, calleeFrame, frameAt, hoverText, referencesOf, stepIntoReason } from './lang';
 import { ExplainUi } from './ui';
 
 const THREAD_ID = 1;
+
+/** Cheap content hash for cache keys (djb2), so a same-length edit is not served stale. */
+function hashOf(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
 
 interface Prepared {
   ctx: StatementContext;
@@ -44,7 +51,7 @@ export class ExplainSession extends DebugSession {
   private values: ExampleValue[] = [];
   private context?: StatementContext;
   /** Snapshots of (frame, index) per stop, for Step Back / Reverse Continue. */
-  private history: { stack: Frame[]; indices: number[]; reason: string }[] = [];
+  private history: { stack: Frame[]; indices: number[]; skips: Branch[][]; reason: string }[] = [];
   private firstStop = true;
   private explainToken = 0;
   /** Explanations by statement, so the next step (prefetched) and Step Back are instant. */
@@ -60,10 +67,28 @@ export class ExplainSession extends DebugSession {
   /** What the current statement can throw (deterministic), for the 💥 button and the UI. */
   private currentThrows: string[] = [];
 
-  constructor(private ui: ExplainUi, private src: ContextSources) {
+  constructor(private ui: ExplainUi, private src: ContextSources, private onDispose?: () => void) {
     super();
     this.setDebuggerLinesStartAt1(true);
     this.setDebuggerColumnsStartAt1(true);
+    // The base class ignores the promises async handlers return: a rejection there would leave
+    // the thread "running" forever. Catch them here and stop on the current line instead.
+    for (const name of ['nextRequest', 'stepInRequest', 'stepOutRequest', 'continueRequest', 'evaluateRequest', 'customRequest'] as const) {
+      const orig = (this as unknown as Record<string, (...a: unknown[]) => unknown>)[name].bind(this);
+      (this as unknown as Record<string, (...a: unknown[]) => unknown>)[name] = (...a: unknown[]) => {
+        const r = orig(...a);
+        if (r instanceof Promise) r.catch((err) => this.recover(err));
+        return r;
+      };
+    }
+  }
+
+  private recover(err: unknown) {
+    this.log(`error: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+    this.cancelAuto();
+    if (!this.stack.length) return this.end();
+    this.ui.showError(this.top.uri, this.top.steps[this.top.index].line, err);
+    this.sendEvent(new StoppedEvent('exception', THREAD_ID));
   }
 
   private get top(): Frame {
@@ -92,8 +117,13 @@ export class ExplainSession extends DebugSession {
   }
 
   protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchArgs) {
-    const doc = await vscode.workspace.openTextDocument(args.file);
-    const frame = await frameAt(doc, args.line);
+    let frame: Frame | undefined;
+    try {
+      const doc = await vscode.workspace.openTextDocument(args.file);
+      frame = await frameAt(doc, args.line);
+    } catch (err) {
+      return this.sendErrorResponse(response, 1, `Cannot start here: ${errMsg(err)}`);
+    }
     if (!frame) {
       this.sendErrorResponse(response, 1, `No function found at ${path.basename(args.file)}:${args.line}`);
       return;
@@ -216,12 +246,16 @@ export class ExplainSession extends DebugSession {
 
   /** Remember where we are, so Step Back / Reverse Continue can come back to it. */
   private snapshot(reason: string) {
-    this.history.push({ stack: [...this.stack], indices: this.stack.map((f) => f.index), reason });
+    this.history.push({ stack: [...this.stack], indices: this.stack.map((f) => f.index), skips: this.stack.map((f) => [...f.skip]), reason });
   }
 
-  private restore(snap: { stack: Frame[]; indices: number[] }) {
+  private restore(snap: { stack: Frame[]; indices: number[]; skips: Branch[][] }) {
     this.stack = [...snap.stack];
-    snap.stack.forEach((f, i) => (f.index = snap.indices[i]));
+    snap.stack.forEach((f, i) => {
+      f.index = snap.indices[i];
+      f.skip = [...snap.skips[i]];
+    });
+    this.uncaughtAt = undefined;
   }
 
   protected setBreakPointsRequest(
@@ -396,7 +430,8 @@ export class ExplainSession extends DebugSession {
           this.cancelAuto();
           return void this.stopAt('end');
         }
-        this.moveNext();
+        if (!this.moveNext()) return this.end();
+        if (run.cancelled) return;
         if (this.atBreakpoint()) {
           this.cancelAuto();
           return void this.stopAt('breakpoint');
@@ -460,7 +495,7 @@ export class ExplainSession extends DebugSession {
         continue;
       }
       if (this.atLastStep()) break;
-      this.moveNext();
+      if (!this.moveNext()) return this.end();
       if (this.atBreakpoint()) return void this.stopAt('breakpoint');
       if (await this.atExceptionBreakpoint()) return void this.stopAt('exception');
     }
@@ -470,7 +505,7 @@ export class ExplainSession extends DebugSession {
   }
 
   private atLastStep(): boolean {
-    return this.stack.length === 1 && this.top.index === this.top.steps.length - 1;
+    return this.peekAhead(1).length === 0;
   }
 
   /** If the current statement calls a project function holding a breakpoint, step into it. */
@@ -496,6 +531,7 @@ export class ExplainSession extends DebugSession {
   protected disconnectRequest(response: DebugProtocol.DisconnectResponse): void {
     this.explainToken++;
     this.cancelAuto();
+    this.onDispose?.();
     this.ui.clear();
     this.sendResponse(response);
   }
@@ -560,14 +596,14 @@ export class ExplainSession extends DebugSession {
     this.explanation = undefined;
     this.values = [];
     this.context = undefined;
-    this.currentThrows = await stepThrows(frame, step);
-    void vscode.commands.executeCommand('setContext', 'explain.canThrow', this.currentThrows.length > 0);
-    const lands = this.currentThrows.length
-      ? step.handler
-        ? `caught by \`${step.handler.text}\` L${step.handler.line}`
-        : `propagates out of ${frame.name}()${this.stack.length > 1 ? ` to ${this.stack[this.stack.length - 2].name}()` : ' (unhandled here)'}`
-      : undefined;
     try {
+      this.currentThrows = await stepThrows(frame, step);
+      void vscode.commands.executeCommand('setContext', 'explain.canThrow', this.currentThrows.length > 0);
+      const lands = this.currentThrows.length
+        ? step.handler
+          ? `caught by \`${step.handler.text}\` L${step.handler.line}`
+          : `propagates out of ${frame.name}()${this.stack.length > 1 ? ` to ${this.stack[this.stack.length - 2].name}()` : ' (unhandled here)'}`
+        : undefined;
       // On slow providers the function summary must not delay the first statement: it lands later.
       const slow = this.src.slow?.() ?? false;
       let header = entered && !slow ? await this.frameHeader(frame) : undefined;
@@ -621,7 +657,7 @@ export class ExplainSession extends DebugSession {
 
   private async frameHeader(frame: Frame): Promise<string> {
     const depth = vscode.workspace.getConfiguration('explain.context').get<number>('definitionDepth', 2);
-    const batchKey = `${frame.uri.fsPath}:${frame.startLine}:${frame.source.length}`;
+    const batchKey = `${frame.uri.fsPath}:${frame.startLine}:${hashOf(frame.source)}`;
     const [summary, callers] = await Promise.all([
       // With a per-function batch the summary comes with it: wait for the batch instead of a second call.
       this.batchPerFunction()
@@ -635,7 +671,7 @@ export class ExplainSession extends DebugSession {
 
   /** Context + explanation + (pending) values for a statement, computed once per statement text. */
   private prepare(frame: Frame, step: Step): Promise<Prepared> {
-    const key = `${frame.uri.fsPath}:${step.line}:${step.text}:${frame.source.length}`;
+    const key = `${frame.uri.fsPath}:${step.line}:${step.text}:${hashOf(frame.source)}`;
     let p = this.prepared.get(key);
     if (!p) {
       p = (async () => {
@@ -647,7 +683,10 @@ export class ExplainSession extends DebugSession {
         }
         const ctx = await buildContext(frame, step, this.src);
         const explanation = await this.src.explainer.explainStatement(ctx);
-        const values = explanation.values ? Promise.resolve(explanation.values) : this.src.explainer.exampleValues(ctx);
+        const values = (explanation.values ? Promise.resolve(explanation.values) : this.src.explainer.exampleValues(ctx)).catch((err) => {
+          this.log(`values: ${errMsg(err)}`);
+          return [] as ExampleValue[];
+        });
         return { ctx, explanation, values };
       })();
       p.catch(() => this.prepared.delete(key));
@@ -663,7 +702,7 @@ export class ExplainSession extends DebugSession {
 
   /** Context resolved once, one model call, results keyed by statement line. */
   private prepareFunction(frame: Frame): Promise<Map<number, Prepared>> {
-    const key = `${frame.uri.fsPath}:${frame.startLine}:${frame.source.length}`;
+    const key = `${frame.uri.fsPath}:${frame.startLine}:${hashOf(frame.source)}`;
     let p = this.batches.get(key);
     if (!p) {
       p = (async () => {
@@ -717,5 +756,6 @@ export class ExplainSession extends DebugSession {
     this.batches.clear();
     this.summaries.clear();
     this.explainToken++;
+    if (this.stack.length) void this.present('step', false).catch((err) => this.recover(err));
   }
 }
