@@ -35,6 +35,17 @@
         "title": "Explain Mode: Follow the exception",
         "category": "Explain",
         "icon": "$(flame)"
+      },
+      {
+        "command": "explain.expand",
+        "title": "Explain Mode: More (expand with the bigger model)",
+        "category": "Explain",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "explain.setApiKey",
+        "title": "Explain Mode: Set API key (OpenAI-compatible provider)",
+        "category": "Explain"
       }
     ],
     "menus": {
@@ -55,6 +66,11 @@
           "command": "explain.followThrow",
           "when": "explain.active && explain.canThrow",
           "group": "navigation@1"
+        },
+        {
+          "command": "explain.expand",
+          "when": "explain.active",
+          "group": "navigation@2"
         }
       ],
       "debug/toolBar": [
@@ -67,6 +83,11 @@
           "command": "explain.followThrow",
           "when": "explain.active && explain.canThrow",
           "group": "navigation@1"
+        },
+        {
+          "command": "explain.expand",
+          "when": "explain.active",
+          "group": "navigation@2"
         }
       ]
     },
@@ -88,6 +109,12 @@
         "key": "ctrl+alt+x",
         "mac": "cmd+alt+x",
         "when": "explain.active && explain.canThrow"
+      },
+      {
+        "command": "explain.expand",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+alt+m",
+        "when": "explain.active"
       }
     ],
     "breakpoints": [
@@ -132,6 +159,35 @@
     "configuration": {
       "title": "Explain Mode",
       "properties": {
+        "explain.provider": {
+          "type": "string",
+          "enum": [
+            "ollama",
+            "openai",
+            "vscode-lm",
+            "claude-cli"
+          ],
+          "default": "ollama",
+          "enumDescriptions": [
+            "Ollama, local (explain.ollamaUrl / explain.model)",
+            "Any OpenAI-compatible API: OpenRouter, OpenAI, LM Studio, vLLM (explain.openai.*; key via 'Explain Mode: Set API key')",
+            "Models registered in VS Code, e.g. GitHub Copilot (explain.vscodeLm.*). Not available in Cursor.",
+            "Claude Code CLI in headless mode, reusing your Claude login (explain.claude.*). ~10 s per call: better as expandProvider than as the per-step model."
+          ],
+          "description": "Model used for every step."
+        },
+        "explain.expandProvider": {
+          "type": "string",
+          "enum": [
+            "same",
+            "ollama",
+            "openai",
+            "vscode-lm",
+            "claude-cli"
+          ],
+          "default": "same",
+          "description": "Model used by the 'More' button (Cmd+Alt+M) for a longer explanation of the current statement. 'same' reuses explain.provider. Typical: ollama for steps, claude-cli or vscode-lm here."
+        },
         "explain.ollamaUrl": {
           "type": "string",
           "default": "http://localhost:11434"
@@ -174,6 +230,36 @@
           "type": "boolean",
           "default": true,
           "description": "On Step Over at an `if`, ask which branch to follow; the other one is skipped."
+        },
+        "explain.openai.baseUrl": {
+          "type": "string",
+          "default": "https://openrouter.ai/api/v1",
+          "description": "Base URL of the OpenAI-compatible API (\u2026/v1)."
+        },
+        "explain.openai.model": {
+          "type": "string",
+          "default": "anthropic/claude-haiku-4.5",
+          "description": "Model id for the OpenAI-compatible provider."
+        },
+        "explain.vscodeLm.vendor": {
+          "type": "string",
+          "default": "",
+          "description": "Vendor filter for vscode.lm (e.g. copilot). Empty = any."
+        },
+        "explain.vscodeLm.family": {
+          "type": "string",
+          "default": "",
+          "description": "Model family filter for vscode.lm (e.g. gpt-4o-mini, claude-3.5-sonnet). Empty = first available."
+        },
+        "explain.claude.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model for the Claude CLI (--model), e.g. haiku, sonnet. Empty = CLI default."
+        },
+        "explain.claude.bin": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the claude executable if not on PATH."
         }
       }
     },

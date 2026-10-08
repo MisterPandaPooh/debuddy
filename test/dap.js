@@ -12,6 +12,7 @@ const explainer = {
   summarizeFunction: async () => '[stub summary]',
   exampleValues: async (ctx) => ctx.vars.map((v) => ({ name: v.split(':')[0], example: '{ …example }', alternative: 'null' })),
   answer: async (ctx, q) => `[stub answer to "${q}" about: ${ctx.statement.slice(0, 20)}]`,
+  expand: async (ctx) => ({ text: `[stub long form for ${ctx.statement.slice(0, 20)}]`, provider: 'stub' }),
 };
 const ui = {
   log: (m) => console.log('   log:', m),
@@ -19,7 +20,7 @@ const ui = {
   highlight: async (u, l) => console.log(`   ui.highlight L${l}`), clearHighlight: () => {}, setAutoStatus: () => {}, pickBranch: async () => undefined,
 };
 
-const session = new ExplainSession(ui, { explainer, tests: { titlesFor: async () => ['getRoles › returns [] when no doc'] } });
+const session = new ExplainSession(ui, { explainer, tests: { titlesFor: async () => ['getRoles › returns [] when no doc'] }, providerName: () => 'stub' });
 session.sendEvent = (e) => console.log(`   → event ${e.event}`, e.body ? JSON.stringify(e.body) : '');
 session.sendResponse = (r) => console.log(`   → response ${r.command}`, r.body ? JSON.stringify(r.body).slice(0, 120) : '');
 session.sendErrorResponse = (r, code, msg) => console.log(`   → ERROR ${r.command}: ${msg}`);

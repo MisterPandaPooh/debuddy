@@ -9,6 +9,8 @@ export interface ShowOptions {
   throws?: string[];
   /** Deterministic: where a throw from this statement lands. */
   lands?: string;
+  /** Long-form explanation from the expand provider, with its name. */
+  more?: { text: string; provider: string };
 }
 
 /** Shows the explanation as a collapsible comment thread right under the current statement. */
@@ -42,6 +44,7 @@ export class ExplainUi implements vscode.Disposable {
       `**Why** ${e.why}`,
       e.watch ? `**Watch** ⚠️ ${e.watch}` : undefined,
       opts.throws?.length ? `**Throws** 🔥 ${opts.throws.join(', ')}${opts.lands ? ` — ${opts.lands}` : ''}` : undefined,
+      opts.more ? `**More** _(${opts.more.provider})_\n\n${opts.more.text}` : undefined,
       opts.footer,
     ]
       .filter(Boolean)

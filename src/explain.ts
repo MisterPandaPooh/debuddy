@@ -1,4 +1,4 @@
-import * as vscode from 'vscode';
+import { ChatProvider } from './providers';
 
 export interface Explanation {
   does: string;
@@ -32,6 +32,8 @@ export interface StatementContext {
 export interface Explainer {
   explainStatement(ctx: StatementContext): Promise<Explanation>;
   exampleValues(ctx: StatementContext): Promise<ExampleValue[]>;
+  /** A longer, free-form explanation from the "expand" provider (usually a bigger model). */
+  expand(ctx: StatementContext): Promise<{ text: string; provider: string }>;
   /** `hints` are one-line summaries of the function's own callees ("name: summary"). */
   summarizeFunction(source: string, reason: string, hints?: string[]): Promise<string>;
   answer(ctx: StatementContext, question: string): Promise<string>;
@@ -78,13 +80,21 @@ warn = "deprecated key: ssl" | undefined`;
 const ANSWER_SYSTEM = `You answer a developer's question about the statement they are currently stopped on while reading code.
 Use ONLY the context given; say so if it is not enough. Answer in at most 4 short lines, no code fences.`;
 
-export class OllamaExplainer implements Explainer {
+const EXPAND_SYSTEM = `You explain one statement of source code in depth to a developer stepping through it like a debugger.
+The enclosing function is shown with the current statement marked ">>". Use ONLY the context given.
+Cover: what the line does, why it is here, what can go wrong, and anything non-obvious (async, ordering, side effects).
+At most 8 short lines of plain prose, no headings, no code fences.`;
+
+/** Providers to use: `main` for every step, `expand` for the on-demand long form. Read per call. */
+export interface ProviderResolver {
+  main(): ChatProvider;
+  expand(): ChatProvider;
+}
+
+export class PromptExplainer implements Explainer {
   private summaries = new Map<string, Promise<string>>();
 
-  private get cfg() {
-    const c = vscode.workspace.getConfiguration('explain');
-    return { url: c.get<string>('ollamaUrl', 'http://localhost:11434'), model: c.get<string>('model', 'qwen2.5-coder:3b') };
-  }
+  constructor(private providers: ProviderResolver) {}
 
   async explainStatement(ctx: StatementContext): Promise<Explanation> {
     const text = await this.chat(EXPLAIN_SYSTEM, contextPrompt(ctx), 100);
@@ -118,23 +128,14 @@ ${known}${source}`;
     return text.trim();
   }
 
-  private async chat(system: string, user: string, maxTokens: number): Promise<string> {
-    const { url, model } = this.cfg;
-    const res = await fetch(`${url}/api/chat`, {
-      method: 'POST',
-      body: JSON.stringify({
-        model,
-        stream: false,
-        options: { temperature: 0.2, num_predict: maxTokens },
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-      }),
-    });
-    if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text()}`);
-    const json = (await res.json()) as { message: { content: string } };
-    return json.message.content;
+  async expand(ctx: StatementContext): Promise<{ text: string; provider: string }> {
+    const provider = this.providers.expand();
+    const text = await provider.chat(EXPAND_SYSTEM, contextPrompt(ctx), 400);
+    return { text: text.trim(), provider: provider.name };
+  }
+
+  private chat(system: string, user: string, maxTokens: number): Promise<string> {
+    return this.providers.main().chat(system, user, maxTokens);
   }
 }
 

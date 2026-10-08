@@ -11,7 +11,22 @@ Step through TypeScript/JavaScript like a debugger — nothing runs, a local LLM
    Shift+F11 step out, F5 run to the next breakpoint, ◀ step back, `Cmd+Alt+A` / ▶▶ auto-walk
    (F6 pauses), hover a variable for an example value, type a question in the Debug Console.
 
-Settings live under `explain.*` (model, context window, definition depth, auto-walk dwell).
+Settings live under `explain.*` (provider, context window, definition depth, auto-walk dwell).
+
+## Providers
+
+`explain.provider` picks the model used at every step; `explain.expandProvider` the one behind
+the **More** button (`Cmd+Alt+M`), which re-explains the current statement at length.
+
+| Provider | Needs | Per-step latency | Notes |
+|---|---|---|---|
+| `ollama` (default) | Ollama + `qwen2.5-coder:3b` | ~0.4 s | local, free; the prompts are tuned for it |
+| `openai` | `explain.openai.baseUrl` + `Explain Mode: Set API key` | 1–3 s | OpenRouter, OpenAI, LM Studio, vLLM, Ollama's `/v1`; the key lives in VS Code secret storage |
+| `vscode-lm` | GitHub Copilot (or any Language Model Chat Provider extension) | 1–3 s | one consent prompt; **not available in Cursor** |
+| `claude-cli` | Claude Code CLI signed in (subscription or API key) | ~10 s | process start dominates: use it as `expandProvider`, not per step |
+
+Cursor runs the extension unchanged; use `ollama`, `openai` or `claude-cli` there, since Cursor
+does not expose its own models to extensions.
 
 ## Develop
 

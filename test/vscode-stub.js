@@ -14,6 +14,7 @@ function openTextDocument(p) {
 module.exports = {
   Position, Uri, Range: class {}, Location: class {},
   commands: { executeCommand: async () => [] },
+  window: { setStatusBarMessage: () => ({ dispose() {} }), showErrorMessage: async () => undefined },
   workspace: { getConfiguration: (section) => ({ get: (k, d) => {
       if (section === 'explain.auto' && k === 'enabled') return process.env.EXPLAIN_AUTO === '1';
       if (section === 'explain.auto' && k === 'dwellMs') return 20;
