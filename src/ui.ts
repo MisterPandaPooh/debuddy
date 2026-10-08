@@ -79,6 +79,15 @@ export class ExplainUi implements vscode.Disposable {
     return pick?.branch;
   }
 
+  /** Replace a placeholder in the current thread's body (e.g. a summary that arrived late). */
+  patchHeader(placeholder: string, text: string) {
+    const c = this.thread?.comments[0];
+    if (!c || !this.thread) return;
+    const body = typeof c.body === 'string' ? c.body : c.body.value;
+    if (!body.includes(placeholder)) return;
+    this.thread.comments = [{ ...c, body: new vscode.MarkdownString(body.replace(placeholder, text)) }];
+  }
+
   showError(uri: vscode.Uri, line: number, err: unknown) {
     this.render(uri, line, `⚠️ ${err instanceof Error ? err.message : String(err)}`);
   }

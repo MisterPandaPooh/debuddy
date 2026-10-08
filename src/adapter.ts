@@ -553,7 +553,16 @@ export class ExplainSession extends DebugSession {
         : `propagates out of ${frame.name}()${this.stack.length > 1 ? ` to ${this.stack[this.stack.length - 2].name}()` : ' (unhandled here)'}`
       : undefined;
     try {
-      let header = entered ? await this.frameHeader(frame) : undefined;
+      // On slow providers the function summary must not delay the first statement: it lands later.
+      const slow = this.src.slow?.() ?? false;
+      let header = entered && !slow ? await this.frameHeader(frame) : undefined;
+      if (entered && slow) {
+        header = `↳ **${frame.name}()** — _summarizing…_`;
+        void this.frameHeader(frame).then((h) => {
+          if (token !== this.explainToken) return;
+          this.ui.patchHeader(`↳ **${frame.name}()** — _summarizing…_`, h);
+        }).catch(() => undefined);
+      }
       if (this.pendingHeader) {
         header = [this.pendingHeader, header].filter(Boolean).join('\n\n');
         this.pendingHeader = undefined;
@@ -585,7 +594,8 @@ export class ExplainSession extends DebugSession {
         this.sendEvent(new InvalidatedEvent(['variables'], THREAD_ID));
       }).catch((err) => this.log(`values: ${err}`));
       // Warm the statements ahead while the user reads this one (explain.prefetch of them).
-      for (const next of this.peekAhead(vscode.workspace.getConfiguration('explain').get<number>('prefetch', 3))) {
+      const ahead = vscode.workspace.getConfiguration('explain').get<number>('prefetch', 3);
+      for (const next of this.peekAhead(slow ? Math.max(ahead, 8) : ahead)) {
         void this.prepare(next.frame, next.step).catch(() => undefined);
       }
     } catch (err) {

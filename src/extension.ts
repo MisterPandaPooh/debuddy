@@ -17,6 +17,7 @@ export function activate(context: vscode.ExtensionContext) {
       () => vscode.workspace.getConfiguration('explain').get<string>('language', 'English'),
     ),
     tests: new TestIndex(),
+    slow: () => registry.current().slow === true,
   };
 
   // Own context key for menus/keybindings: set while an Explain session is the active one.

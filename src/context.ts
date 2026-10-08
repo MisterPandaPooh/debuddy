@@ -9,6 +9,8 @@ const STDLIB = /^(console|Math|JSON|Object|Array|Promise|String|Number|Date|Map|
 export interface ContextSources {
   explainer: Explainer;
   tests: TestIndex;
+  /** Seconds-per-call provider: spend tokens, not round-trips (raw callee code instead of summaries). */
+  slow?: () => boolean;
 }
 
 /** Errors a statement can raise: its own `throw` plus the throw sites of its project callees. No LLM. */
@@ -44,8 +46,13 @@ export async function buildContext(frame: Frame, step: Step, src: ContextSources
       const target = await vscode.workspace.openTextDocument(loc.uri);
       const callee = frameAt(target, loc.range.start.line + 1);
       if (callee) {
-        const summary = await summarizeFrame(callee, src, definitionDepth() - 1);
-        callees.push(`${call.name}: ${summary}`);
+        if (src.slow?.()) {
+          // One round-trip matters more than tokens: a big model reads the callee itself.
+          callees.push(`${call.name}:\n${excerpt(callee.source, 25)}`);
+        } else {
+          const summary = await summarizeFrame(callee, src, definitionDepth() - 1);
+          callees.push(`${call.name}: ${summary}`);
+        }
         continue;
       }
     }
@@ -75,6 +82,12 @@ export async function buildContext(frame: Frame, step: Step, src: ContextSources
     tests: await src.tests.titlesFor(frame.name),
     reason: frame.reason,
   };
+}
+
+/** First `n` lines of a function, with an ellipsis when cut. */
+function excerpt(source: string, n: number): string {
+  const lines = source.split('\n');
+  return lines.length <= n ? source : [...lines.slice(0, n), '  …', '}'].join('\n');
 }
 
 /** How many go-to-definition levels to resolve below the current statement. */
