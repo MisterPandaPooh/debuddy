@@ -68,7 +68,8 @@ First time, publish one platform by hand to validate the publisher before trusti
 
 ```bash
 npm run build
-VSCE_PAT=… npx @vscode/vsce publish --target darwin-arm64
+az login --tenant <AZURE_TENANT_ID>   # the same Microsoft account, member of the publisher
+npx @vscode/vsce publish --azure-credential --target darwin-arm64
 ```
 
 ## 4. Check
@@ -86,4 +87,5 @@ VSCE_PAT=… npx @vscode/vsce publish --target darwin-arm64
   gets nothing until that target is added to the matrix.
 - The GPU variants (CUDA/Vulkan) are excluded on purpose; the default binary uses Metal on macOS
   and CPU elsewhere.
-- Rotate the tokens before they expire: `gh secret set VSCE_PAT` again.
+- Nothing to rotate on the Marketplace side (OIDC). The Open VSX token lives until you revoke it;
+  if you ever regenerate it: `gh secret set OVSX_PAT` again.
