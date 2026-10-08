@@ -50,6 +50,10 @@ jobs:
     name: GitHub release + publish
     needs: package
     runs-on: ubuntu-latest
+    # `secrets` cannot be read in step `if`s; copy them into env and test that instead.
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -65,12 +69,8 @@ jobs:
         with:
           node-version: 22
       - name: Publish to the VS Code Marketplace
-        if: ${{ secrets.VSCE_PAT != '' }}
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        if: env.VSCE_PAT != ''
         run: for f in vsix/*.vsix; do npx @vscode/vsce publish --packagePath "$f"; done
       - name: Publish to Open VSX (Cursor, VSCodium)
-        if: ${{ secrets.OVSX_PAT != '' }}
-        env:
-          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        if: env.OVSX_PAT != ''
         run: for f in vsix/*.vsix; do npx ovsx publish "$f" -p "$OVSX_PAT"; done
