@@ -1,15 +1,19 @@
 .vscode/**
+.github/**
 .gitignore
 src/**
 test/**
 bench/**
 sample/**
+docs/**
+scripts/**
 tsconfig.json
 dist/**/*.map
-# everything is bundled into dist/ except the native llama.cpp runtime, which stays in node_modules
-node_modules/**
-!node_modules/node-llama-cpp/**
-!node_modules/web-tree-sitter/**
-!node_modules/@node-llama-cpp/**
-!node_modules/lifecycle-utils/**
-!node_modules/ipull/**
+CONTRIBUTING.md
+# Bundled into dist/ by esbuild, or only needed to copy the .wasm at build time:
+node_modules/typescript/**
+node_modules/tree-sitter-python/**
+node_modules/tree-sitter-rust/**
+node_modules/@types/**
+# Everything else under node_modules is a production dependency of node-llama-cpp / web-tree-sitter
+# and ships as is; npm installs only this platform's @node-llama-cpp binary.
