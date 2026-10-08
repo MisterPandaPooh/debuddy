@@ -60,6 +60,25 @@ const cases = [
   },
 ];
 
+const JUDGE = process.env.JUDGE ?? 'qwen3-coder:30b-a3b-q4_K_M';
+
+/** 0 = wrong or invented, 1 = correct but shallow/tautological, 2 = correct and genuinely useful. */
+async function judge(prompt, answer) {
+  const res = await fetch('http://localhost:11434/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({
+      model: JUDGE, stream: false, think: false, options: { temperature: 0, num_predict: 5 },
+      messages: [
+        { role: 'system', content: 'You grade a short explanation of one code statement. Reply with a single digit:\n2 = every claim is true for this code AND the Why/Watch add real understanding (not a paraphrase of the line)\n1 = true but shallow: paraphrases the line, or Why just restates Does, or Watch is generic\n0 = contains a false or invented claim, or wrong format' },
+        { role: 'user', content: `${prompt}\n\n--- Explanation to grade ---\n${answer}\n\nDigit:` },
+      ],
+    }),
+  });
+  const j = await res.json();
+  const m = (j.message?.content ?? '').match(/[012]/);
+  return m ? Number(m[0]) : 0;
+}
+
 async function ask(model, prompt) {
   const t0 = performance.now();
   const res = await fetch('http://localhost:11434/api/chat', {
@@ -69,7 +88,8 @@ async function ask(model, prompt) {
       stream: false,
       think: false,
       options: { temperature: 0.2, num_predict: 100 },
-      messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: prompt }],
+      // qwen3-style models only skip their reasoning preamble with this marker.
+      messages: [{ role: 'system', content: SYSTEM + (/qwen3:/.test(model) ? ' /no_think' : '') }, { role: 'user', content: prompt + (/qwen3:/.test(model) ? ' /no_think' : '') }],
     }),
   });
   const json = await res.json();
@@ -94,6 +114,7 @@ for (const model of models) {
   await ask(model, 'warm up'); // load the weights before timing
   let format = 0, facts = 0, factsTotal = 0, total = 0;
   const notes = [];
+  const toJudge = [];
   for (const c of cases) {
     const prompt = `Enclosing function:\n${FN(c.line)}\n\nCurrent statement:\n${c.line}${c.extra ? '\n\n' + c.extra : ''}`;
     const { text, ms } = await ask(model, prompt);
@@ -101,6 +122,7 @@ for (const model of models) {
     const does = pick(text, 'Does'), why = pick(text, 'Why'), watch = pick(text, 'Watch');
     const ok = does && why && text.match(/^Watch:/mi) && text.split('\n').filter((l) => l.trim()).length <= 4;
     if (ok) format++;
+    toJudge.push(ok ? { prompt, text } : null);
     for (const [k, re] of Object.entries(c.checks)) {
       factsTotal++;
       const field = k === 'notDoes' ? does : { does, why, watch }[k];
@@ -109,10 +131,15 @@ for (const model of models) {
       else notes.push(`${c.name}.${k}`);
     }
   }
-  rows.push({ model, gb: sz.get(model) ?? NaN, format: `${format}/${cases.length}`, facts: `${facts}/${factsTotal}`, ms: Math.round(total / cases.length), notes: notes.join(' ') });
+  rows.push({ model, gb: sz.get(model) ?? NaN, format: `${format}/${cases.length}`, facts: `${facts}/${factsTotal}`, toJudge, judge: '', ms: Math.round(total / cases.length), notes: notes.join(' ') });
+}
+for (const r of rows) {
+  let score = 0;
+  for (const j of r.toJudge) score += j ? await judge(j.prompt, j.text) : 0;
+  r.judge = `${score}/${cases.length * 2}`;
 }
 rows.sort((a, b) => a.gb - b.gb);
-console.log('\n' + ['size GB', 'model', 'format', 'facts', 'ms/line', 'missed'].map((h) => h.padEnd(h === 'model' ? 32 : 9)).join(''));
+console.log('\n' + ['size GB', 'model', 'format', 'facts', 'judge', 'ms/line', 'missed'].map((h) => h.padEnd(h === 'model' ? 32 : 9)).join(''));
 for (const r of rows) {
-  console.log([r.gb.toFixed(1), r.model, r.format, r.facts, String(r.ms), r.notes].map((v, i) => String(v).padEnd(i === 1 ? 32 : 9)).join(''));
+  console.log([r.gb.toFixed(1), r.model, r.format, r.facts, r.judge, String(r.ms), r.notes].map((v, i) => String(v).padEnd(i === 1 ? 32 : 9)).join(''));
 }

@@ -2,6 +2,15 @@ import { execFile } from 'child_process';
 import * as vscode from 'vscode';
 import { ProviderKind } from './providers';
 
+// Measured in bench/RESULTS.md: above ~2 GB latency grows faster than accuracy with this prompt.
+const OLLAMA_TIERS = [
+  { id: 'qwen2.5-coder:0.5b', detail: '0.4 GB · ~0.2 s/line · minimum: correct but shallow' },
+  { id: 'qwen2.5-coder:3b', detail: '1.9 GB · ~0.4 s/line · default, best balance' },
+  { id: 'llama3.2:3b', detail: '2.0 GB · ~0.45 s/line · alternative to the default' },
+  { id: 'qwen2.5-coder:7b', detail: '4.7 GB · ~0.9 s/line · slightly deeper, twice slower' },
+  { id: 'qwen2.5:14b-instruct-q4_K_M', detail: '9 GB · ~2 s/line · max; no visible gain over 7B here' },
+];
+
 const KINDS: { provider: ProviderKind; label: string; detail: string }[] = [
   { provider: 'ollama', label: 'Ollama (local)', detail: 'free, ~0.4 s per step with qwen2.5-coder:3b' },
   { provider: 'claude-cli', label: 'Claude Code CLI', detail: 'your Claude login (subscription), ~4 s per call with the persistent session' },
@@ -61,14 +70,27 @@ export class SettingsUi implements vscode.Disposable {
     const set = (key: string, value: string) => c.update(key, value, vscode.ConfigurationTarget.Global);
     switch (kind) {
       case 'ollama': {
-        const models = await this.ollamaModels(c.get<string>('ollamaUrl', 'http://localhost:11434'));
-        const pick = await vscode.window.showQuickPick(
-          [...models.map((m) => ({ label: m })), { label: '$(edit) Other…' }],
-          { placeHolder: models.length ? 'Ollama model' : 'Ollama is not reachable — type a model name' },
-        );
+        const installed = await this.ollamaModels(c.get<string>('ollamaUrl', 'http://localhost:11434'));
+        const has = (id: string) => installed.includes(id) || installed.includes(`${id}:latest`);
+        type Item = vscode.QuickPickItem & { id?: string; pull?: boolean };
+        const items: Item[] = [
+          { label: 'Recommended (measured)', kind: vscode.QuickPickItemKind.Separator },
+          ...OLLAMA_TIERS.map((t) => ({ label: t.id, detail: t.detail, description: has(t.id) ? '$(check) installed' : '$(cloud-download) will pull', id: t.id, pull: !has(t.id) })),
+          { label: 'Installed', kind: vscode.QuickPickItemKind.Separator },
+          ...installed.filter((m) => !OLLAMA_TIERS.some((t) => m === t.id || m === `${t.id}:latest`)).map((m) => ({ label: m, id: m })),
+          { label: '$(edit) Other…' },
+        ];
+        const pick = await vscode.window.showQuickPick(items, { placeHolder: installed.length ? 'Ollama model' : 'Ollama is not reachable — pick a tier to pull, or type a name' });
         if (!pick) return;
-        const name = pick.label.startsWith('$(edit)') ? await vscode.window.showInputBox({ prompt: 'Ollama model', value: c.get('model') }) : pick.label;
-        if (name) await set('model', name);
+        const name = pick.id ?? (await vscode.window.showInputBox({ prompt: 'Ollama model', value: c.get('model') }));
+        if (!name) return;
+        await set('model', name);
+        if (pick.pull) {
+          // The download runs where the user can see it; the setting already points at the model.
+          const term = vscode.window.createTerminal('Explain Mode: ollama pull');
+          term.show();
+          term.sendText(`ollama pull ${name}`);
+        }
         return;
       }
       case 'claude-cli': {

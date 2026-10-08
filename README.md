@@ -19,7 +19,7 @@ Settings live under `explain.*` (provider, context window, definition depth, aut
 
 | Provider | Needs | Per-step latency | Notes |
 |---|---|---|---|
-| `ollama` (default) | Ollama + `qwen2.5-coder:3b` | ~0.4 s | local, free; the prompts are tuned for it |
+| `ollama` (default) | Ollama + `qwen2.5-coder:3b` | ~0.4 s | local, free; the prompts are tuned for it. Tiers measured in [bench/RESULTS.md](bench/RESULTS.md): `qwen2.5-coder:0.5b` (0.4 GB, 0.2 s) → `qwen2.5-coder:3b` (1.9 GB, default) → `qwen2.5-coder:7b` (4.7 GB) → `qwen2.5:14b` (9 GB); above 2 GB latency grows faster than accuracy |
 | `openai` | `explain.openai.baseUrl` + `Explain Mode: Set API key` | 1–3 s | OpenRouter, OpenAI, LM Studio, vLLM, Ollama's `/v1`; the key lives in VS Code secret storage |
 | `vscode-lm` | GitHub Copilot (or any Language Model Chat Provider extension) | 1–3 s | one consent prompt; **not available in Cursor** |
 | `claude-cli` | Claude Code CLI signed in (subscription or API key) | ~4 s | one persistent `stream-json` session (`explain.claude.persistentSession`); the CLI is an agent harness, so it never gets as fast as a chat API |
