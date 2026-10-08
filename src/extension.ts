@@ -36,11 +36,18 @@ export function activate(context: vscode.ExtensionContext) {
       },
       vscode.DebugConfigurationProviderTriggerKind.Dynamic,
     ),
-    vscode.commands.registerCommand('explain.autoWalk', () =>
-      vscode.debug.activeDebugSession?.type === 'explain'
-        ? vscode.debug.activeDebugSession.customRequest('autoWalk')
-        : vscode.window.showInformationMessage('Start Explain Mode first (Cmd+Alt+E), then auto-walk.'),
-    ),
+    vscode.commands.registerCommand('explain.autoWalk', async () => {
+      const session = vscode.debug.activeDebugSession;
+      if (session?.type !== 'explain') {
+        void vscode.window.showInformationMessage('Start Explain Mode first (Cmd+Alt+E), then auto-walk.');
+        return;
+      }
+      try {
+        await session.customRequest('autoWalk');
+      } catch (err) {
+        void vscode.window.showErrorMessage(`Auto-walk failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }),
     vscode.commands.registerCommand('explain.startHere', () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) return;

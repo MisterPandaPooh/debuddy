@@ -241,7 +241,8 @@ export class ExplainSession extends DebugSession {
   protected customRequest(command: string, response: DebugProtocol.Response, args: unknown): void {
     if (command !== 'autoWalk') return super.customRequest(command, response, args);
     this.sendResponse(response);
-    if (this.auto) return;
+    this.log(`autoWalk requested (auto already running: ${!!this.auto}, stack: ${this.stack.length})`);
+    if (this.auto || !this.stack.length) return;
     this.sendEvent(new ContinuedEvent(THREAD_ID));
     void this.autoWalk();
   }
@@ -268,6 +269,19 @@ export class ExplainSession extends DebugSession {
     this.auto = run;
     this.ui.setAutoStatus(true);
     const dwell = vscode.workspace.getConfiguration('explain.auto').get<number>('dwellMs', 3000);
+    this.log(`auto: start (dwell ${dwell} ms)`);
+    try {
+      await this.autoLoop(run, dwell);
+    } catch (err) {
+      this.log(`auto: crashed — ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+      if (this.auto === run) {
+        this.cancelAuto();
+        void this.stopAt('exception');
+      }
+    }
+  }
+
+  private async autoLoop(run: { cancelled: boolean; wake: () => void }, dwell: number) {
     for (let guard = 0; guard < 5000 && !run.cancelled; guard++) {
       let entered = false;
       if (await this.enterCalleeWithBreakpoint()) {
