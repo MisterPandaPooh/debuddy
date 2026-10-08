@@ -133,8 +133,8 @@
         },
         "explain.auto.enabled": {
           "type": "boolean",
-          "default": true,
-          "description": "Continue (F5) auto-walks: advances and explains every statement; breakpoints and Pause (F6) stop it. Off: F5 runs silently to the next breakpoint."
+          "default": false,
+          "description": "Make Continue (F5) auto-walk instead of running silently to the next breakpoint. Off by default: F5 runs to the next breakpoint, the \u25b6\u25b6 toolbar button (Cmd+Alt+A) starts the auto-walk."
         },
         "explain.auto.dwellMs": {
           "type": "number",

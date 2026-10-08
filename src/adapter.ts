@@ -334,7 +334,7 @@ export class ExplainSession extends DebugSession {
 
   protected async continueRequest(response: DebugProtocol.ContinueResponse) {
     this.sendResponse(response);
-    if (vscode.workspace.getConfiguration('explain.auto').get<boolean>('enabled', true)) return this.autoWalk();
+    if (vscode.workspace.getConfiguration('explain.auto').get<boolean>('enabled', false)) return this.autoWalk();
     const wasAtEnd = this.atLastStep();
     // Walk until a breakpoint; enter project callees that contain one so a
     // breakpoint in another function is reachable from the entry point.
