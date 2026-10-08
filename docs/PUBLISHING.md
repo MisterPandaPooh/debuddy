@@ -45,10 +45,10 @@ VSCE_PAT=… npx @vscode/vsce publish --target darwin-arm64
 
 ## 4. Check
 
-- Marketplace: <https://marketplace.visualstudio.com/items?itemName=MisterPandaPooh.explain-mode>
+- Marketplace: <https://marketplace.visualstudio.com/items?itemName=MisterPandaPooh.debuddy>
   (the page shows the README; relative image links are rewritten to the GitHub repo because
   `repository` is set, so the screenshots must be committed under `images/`).
-- Open VSX: <https://open-vsx.org/extension/MisterPandaPooh/explain-mode>.
+- Open VSX: <https://open-vsx.org/extension/MisterPandaPooh/debuddy>.
 - In a clean VS Code: install, open a TS file, `Cmd/Ctrl+Alt+E`, accept the model download.
 
 ## Notes

@@ -1,11 +1,11 @@
-# Contributing to Explain Mode
+# Contributing to DeBuddy
 
 Thanks for helping. This file is short on purpose: the codebase is small and the README's
 "Develop" section already says how to build and test.
 
 ## Ground rules
 
-- **Nothing runs the user's code.** Explain Mode is a static walkthrough. Any feature that
+- **Nothing runs the user's code.** DeBuddy is a static walkthrough. Any feature that
   executes the program belongs to a real debugger, not here.
 - **Deterministic first, model second.** If a fact can come from the AST or the language
   server (callees, types, throw sites, tests), get it there and hand it to the model. Prompts
@@ -54,6 +54,6 @@ Set `slow = true` when a call takes seconds: the adapter then batches one call p
 
 ## Reporting bugs
 
-Open **View → Output → "Explain Mode"**: every DAP request, stop, batch and throw-follow is
+Open **View → Output → "DeBuddy"**: every DAP request, stop, batch and throw-follow is
 logged there. Paste the relevant lines with the file/line you were on; it usually tells the
 whole story.

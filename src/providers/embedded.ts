@@ -44,7 +44,7 @@ export async function confirmEmbeddedDownload(id: string): Promise<boolean> {
   const name = id.split('/').pop()?.replace(/\.gguf$/, '') ?? id;
   const size = id === DEFAULT_EMBEDDED ? ` (${EMBEDDED_SIZE_GB} GB)` : '';
   const choice = await vscode.window.showInformationMessage(
-    `Explain Mode needs a local model: ${name}${size}. Download it now into the extension storage?`,
+    `DeBuddy needs a local model: ${name}${size}. Download it now into the extension storage?`,
     { modal: true, detail: 'One-time download from Hugging Face. You can switch to Ollama or another provider instead.' },
     'Download',
     'Use Ollama instead',
@@ -67,7 +67,7 @@ export async function downloadEmbeddedModel(dir: string, id: string): Promise<st
   }
   const { createModelDownloader } = await loadLlamaCpp();
   return vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: `Explain Mode: downloading ${id.split('/').pop()}`, cancellable: true },
+    { location: vscode.ProgressLocation.Notification, title: `DeBuddy: downloading ${id.split('/').pop()}`, cancellable: true },
     async (progress, token) => {
       let last = 0;
       const downloader = await createModelDownloader({
@@ -83,7 +83,7 @@ export async function downloadEmbeddedModel(dir: string, id: string): Promise<st
       token.onCancellationRequested(() => void downloader.cancel({ deleteTempFile: true }));
       try {
         const file = await downloader.download();
-        void vscode.window.showInformationMessage(`Explain Mode: ${id === DEFAULT_EMBEDDED ? EMBEDDED_LABEL : path.basename(file)} is ready.`);
+        void vscode.window.showInformationMessage(`DeBuddy: ${id === DEFAULT_EMBEDDED ? EMBEDDED_LABEL : path.basename(file)} is ready.`);
         return file;
       } catch (err) {
         if (!token.isCancellationRequested) void vscode.window.showErrorMessage(`Download failed: ${errMsg(err)}`);

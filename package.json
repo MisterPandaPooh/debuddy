@@ -1,18 +1,18 @@
 {
-  "name": "explain-mode",
-  "displayName": "Explain Mode",
-  "description": "Step through code like a debugger \u2014 nothing runs, a local model explains each statement in place.",
+  "name": "debuddy",
+  "displayName": "DeBuddy",
+  "description": "The placebo debugger: step through code like a debugger, nothing runs, everything gets explained \u2014 by a local model, in VS Code or Cursor.",
   "version": "0.1.0",
   "publisher": "MisterPandaPooh",
   "license": "MIT",
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/MisterPandaPooh/explain-mode.git"
+    "url": "https://github.com/MisterPandaPooh/debuddy.git"
   },
-  "homepage": "https://github.com/MisterPandaPooh/explain-mode#readme",
+  "homepage": "https://github.com/MisterPandaPooh/debuddy#readme",
   "bugs": {
-    "url": "https://github.com/MisterPandaPooh/explain-mode/issues"
+    "url": "https://github.com/MisterPandaPooh/debuddy/issues"
   },
   "keywords": [
     "explain",
@@ -52,30 +52,30 @@
     "commands": [
       {
         "command": "explain.startHere",
-        "title": "Explain Mode: Start Here",
-        "category": "Explain"
+        "title": "DeBuddy: Start Here",
+        "category": "DeBuddy"
       },
       {
         "command": "explain.autoWalk",
-        "title": "Explain Mode: Auto-walk",
-        "category": "Explain",
+        "title": "DeBuddy: Auto-walk",
+        "category": "DeBuddy",
         "icon": "$(run-all)"
       },
       {
         "command": "explain.followThrow",
-        "title": "Explain Mode: Follow the exception",
-        "category": "Explain",
+        "title": "DeBuddy: Follow the exception",
+        "category": "DeBuddy",
         "icon": "$(flame)"
       },
       {
         "command": "explain.setApiKey",
-        "title": "Explain Mode: Set API key (OpenAI-compatible provider)",
-        "category": "Explain"
+        "title": "DeBuddy: Set API key (OpenAI-compatible provider)",
+        "category": "DeBuddy"
       },
       {
         "command": "explain.configure",
-        "title": "Explain Mode: Choose provider / model",
-        "category": "Explain",
+        "title": "DeBuddy: Choose provider / model",
+        "category": "DeBuddy",
         "icon": "$(settings-gear)"
       }
     ],
@@ -196,7 +196,7 @@
     "debuggers": [
       {
         "type": "explain",
-        "label": "Explain Mode",
+        "label": "DeBuddy",
         "languages": [
           "typescript",
           "javascript",
@@ -221,7 +221,7 @@
           {
             "type": "explain",
             "request": "launch",
-            "name": "Explain Mode: Start Here"
+            "name": "DeBuddy: Start Here"
           }
         ],
         "configurationAttributes": {
@@ -241,7 +241,7 @@
       }
     ],
     "configuration": {
-      "title": "Explain Mode",
+      "title": "DeBuddy",
       "properties": {
         "explain.provider": {
           "type": "string",
@@ -257,7 +257,7 @@
           "enumDescriptions": [
             "Default. llama.cpp inside the extension with Qwen2.5-Coder 3B (2.1 GB, downloaded once into the extension storage). Nothing to install, ~0.7 s per step.",
             "Ollama, local, when you want another model size (explain.ollamaUrl / explain.model).",
-            "Any OpenAI-compatible API: OpenRouter, OpenAI, LM Studio, vLLM (explain.openai.*; key via 'Explain Mode: Set API key')",
+            "Any OpenAI-compatible API: OpenRouter, OpenAI, LM Studio, vLLM (explain.openai.*; key via 'DeBuddy: Set API key')",
             "Models registered in VS Code, e.g. GitHub Copilot (explain.vscodeLm.*). Not available in Cursor.",
             "Claude Code CLI, reusing your Claude login (subscription or key). A persistent session keeps it at ~4 s per call (explain.claude.*).",
             "Cursor Agent CLI (`agent -p`), reusing your Cursor subscription; run `agent login` once (explain.cursor.*)."

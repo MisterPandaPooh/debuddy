@@ -50,9 +50,9 @@ export class HoverValues implements vscode.HoverProvider {
 export class ExplainUi implements vscode.Disposable {
   readonly hover = new HoverValues();
   private hoverReg = vscode.languages.registerHoverProvider(supportedLanguageIds, this.hover);
-  private controller = vscode.comments.createCommentController('explain', 'Explain Mode');
+  private controller = vscode.comments.createCommentController('explain', 'DeBuddy');
   private thread?: vscode.CommentThread;
-  private output = vscode.window.createOutputChannel('Explain Mode');
+  private output = vscode.window.createOutputChannel('DeBuddy');
   // Same colour VS Code uses for the stopped line, since in auto mode the thread is "running".
   private running = vscode.window.createTextEditorDecorationType({
     isWholeLine: true,
@@ -100,7 +100,7 @@ export class ExplainUi implements vscode.Disposable {
 
   setAutoStatus(on: boolean) {
     if (!on) return this.status.hide();
-    this.status.text = '$(debug-pause) Explain: auto-walking';
+    this.status.text = '$(debug-pause) DeBuddy: auto-walking';
     this.status.tooltip = 'Click or press F6 to pause';
     this.status.command = 'workbench.action.debug.pause';
     this.status.show();

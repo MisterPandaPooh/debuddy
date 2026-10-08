@@ -53,8 +53,8 @@ jobs:
       # Installs this platform's llama.cpp binary only; the VSIX is therefore per target.
       - run: npm ci ${{ matrix.npm_flags }}
       - run: npm run build
-      - run: npx @vscode/vsce package --target ${{ matrix.target }} --out explain-mode-${{ matrix.target }}.vsix
+      - run: npx @vscode/vsce package --target ${{ matrix.target }} --out debuddy-${{ matrix.target }}.vsix
       - uses: actions/upload-artifact@v4
         with:
-          name: explain-mode-${{ matrix.target }}
-          path: explain-mode-${{ matrix.target }}.vsix
+          name: debuddy-${{ matrix.target }}
+          path: debuddy-${{ matrix.target }}.vsix

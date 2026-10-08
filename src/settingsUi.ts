@@ -26,7 +26,7 @@ const KINDS: { provider: ProviderKind; label: string; detail: string }[] = [
 /** `ollama pull` through the API, with a cancellable progress notification. */
 export async function pullOllamaModel(url: string, name: string): Promise<boolean> {
   return vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: `Explain Mode: downloading ${name}`, cancellable: true },
+    { location: vscode.ProgressLocation.Notification, title: `DeBuddy: downloading ${name}`, cancellable: true },
     async (progress, token) => {
       const ctrl = new AbortController();
       token.onCancellationRequested(() => ctrl.abort());
@@ -57,7 +57,7 @@ export async function pullOllamaModel(url: string, name: string): Promise<boolea
             }
           }
         }
-        void vscode.window.showInformationMessage(`Explain Mode: ${name} is ready.`);
+        void vscode.window.showInformationMessage(`DeBuddy: ${name} is ready.`);
         return true;
       } catch (err) {
         if (ctrl.signal.aborted) return false;
@@ -94,8 +94,8 @@ export class SettingsUi implements vscode.Disposable {
       : kind === 'cursor-cli' ? c.get<string>('cursor.model') || 'default'
       : kind === 'vscode-lm' ? c.get<string>('vscodeLm.family') || 'first available'
       : c.get<string>('openai.model');
-    this.item.text = `$(comment-discussion) Explain: ${kind} · ${model}`;
-    this.item.tooltip = 'Explain Mode — click to change provider or model';
+    this.item.text = `$(comment-discussion) DeBuddy: ${kind} · ${model}`;
+    this.item.tooltip = 'DeBuddy — click to change provider or model';
     this.item.show();
   }
 
@@ -106,11 +106,11 @@ export class SettingsUi implements vscode.Disposable {
     type Item = vscode.QuickPickItem & { provider?: ProviderKind };
     const items: Item[] = [
       ...KINDS.map((k) => ({ ...k, description: k.provider === current ? '$(check) current' : '' })),
-      { label: '$(settings-gear) All Explain Mode settings…', detail: 'context window, definition depth, auto-walk dwell, …' },
+      { label: '$(settings-gear) All DeBuddy settings…', detail: 'context window, definition depth, auto-walk dwell, …' },
     ];
-    const pick = await vscode.window.showQuickPick(items, { placeHolder: 'Explain Mode: which model explains your code?' });
+    const pick = await vscode.window.showQuickPick(items, { placeHolder: 'DeBuddy: which model explains your code?' });
     if (!pick) return;
-    if (!pick.provider) return void vscode.commands.executeCommand('workbench.action.openSettings', '@ext:MisterPandaPooh.explain-mode');
+    if (!pick.provider) return void vscode.commands.executeCommand('workbench.action.openSettings', '@ext:MisterPandaPooh.debuddy');
     await c.update('provider', pick.provider, vscode.ConfigurationTarget.Global);
     await this.pickModel(pick.provider);
   }
@@ -123,7 +123,7 @@ export class SettingsUi implements vscode.Disposable {
         // One model, no choice to make: just make sure it is on disk.
         const id = c.get<string>('embedded.model', DEFAULT_EMBEDDED);
         if (isEmbeddedModelDownloaded(this.storageDir, id)) {
-          void vscode.window.setStatusBarMessage(`$(check) Explain: ${EMBEDDED_LABEL} is downloaded`, 4000);
+          void vscode.window.setStatusBarMessage(`$(check) DeBuddy: ${EMBEDDED_LABEL} is downloaded`, 4000);
         } else {
           await downloadEmbeddedModel(this.storageDir, id);
         }

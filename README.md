@@ -1,12 +1,13 @@
 <p align="center">
-  <img src="images/icon.png" width="96" alt="Explain Mode icon">
+  <img src="images/icon.png" width="96" alt="DeBuddy icon">
 </p>
 
-<h1 align="center">Explain Mode</h1>
+<h1 align="center">DeBuddy</h1>
 
 <p align="center">
-  <b>Step through code like a debugger. Nothing runs — a local model explains each statement in place.</b><br>
-  F10 · F11 · breakpoints · call stack · branch choice · follow the exception — on code you have never read.
+  <b>The placebo debugger. Nothing runs. Everything gets explained.</b><br>
+  Step through code like a debugger — F10 · F11 · breakpoints · call stack · branch choice · follow the exception —<br>
+  while a local model explains each statement in place. On code you have never read.
 </p>
 
 <table align="center">
@@ -19,21 +20,21 @@
 </table>
 
 <p align="center">
-  <a href="https://github.com/MisterPandaPooh/explain-mode/releases"><img alt="Download" src="https://img.shields.io/badge/download-VSIX-2ea44f"></a>
-  <a href="https://github.com/MisterPandaPooh/explain-mode/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MisterPandaPooh/explain-mode/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/MisterPandaPooh/debuddy/releases"><img alt="Download" src="https://img.shields.io/badge/download-VSIX-2ea44f"></a>
+  <a href="https://github.com/MisterPandaPooh/debuddy/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MisterPandaPooh/debuddy/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="VS Code" src="https://img.shields.io/badge/VS%20Code-%E2%89%A5%201.95-blue">
   <img alt="Cursor" src="https://img.shields.io/badge/Cursor-supported-7c3aed">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey">
 </p>
 
 <p align="center">
-  <img src="images/walkthrough.png" width="760" alt="Explain Mode stopped on a line: Does / Why / Watch / Throws under the statement">
+  <img src="images/walkthrough.png" width="760" alt="DeBuddy stopped on a line: Does / Why / Watch / Throws under the statement">
 </p>
 
 ---
 
 You open a function you did not write. Instead of reading it top to bottom and guessing, you
-**start Explain Mode on a line and press F10**. The next statement lights up, and a short card
+**start DeBuddy on a line and press F10**. The next statement lights up, and a short card
 appears right under it:
 
 > **Does** Fetches the user by id and attaches its roles.
@@ -61,8 +62,8 @@ supported natively** (exact syntax walkers); other languages ride on their langu
 **Nothing to configure.** The first explanation downloads a 2.1 GB model (Qwen2.5-Coder 3B)
 into the extension's storage, once, after asking you. Then it is all local, ~0.5 s per line.
 
-- **VS Code Marketplace / Open VSX**: search for *Explain Mode* (when published).
-- **VSIX**: grab the file for your platform from the [releases page](https://github.com/MisterPandaPooh/explain-mode/releases),
+- **VS Code Marketplace / Open VSX**: search for *DeBuddy* (when published).
+- **VSIX**: grab the file for your platform from the [releases page](https://github.com/MisterPandaPooh/debuddy/releases),
   then `Extensions → ⋯ → Install from VSIX…`. Works in **VS Code** and **Cursor**.
 
 Prefer your own stack? Pick it from the status bar: Ollama (any model), GitHub Copilot models,
@@ -111,7 +112,7 @@ Change it from the status bar (`Explain: embedded · Qwen2.5-Coder 3B`).
 |---|---|---|---|
 | `embedded` (default) | nothing: llama.cpp (`node-llama-cpp`) inside the extension, model downloaded once after confirmation | ~0.7 s | one model, the measured sweet spot; +55 MB of extension (native binary per platform) |
 | `ollama` | Ollama + any model (`explain.model`) | ~0.4 s | tiers measured in [bench/RESULTS.md](bench/RESULTS.md): `qwen2.5-coder:0.5b` (0.4 GB) → `3b` (default) → `7b` → `qwen2.5:14b` (9 GB); above 2 GB latency grows faster than accuracy |
-| `openai` | base URL + `Explain Mode: Set API key` | 1–3 s | OpenRouter, OpenAI, LM Studio, vLLM, Ollama's `/v1`; the key lives in VS Code secret storage |
+| `openai` | base URL + `DeBuddy: Set API key` | 1–3 s | OpenRouter, OpenAI, LM Studio, vLLM, Ollama's `/v1`; the key lives in VS Code secret storage |
 | `vscode-lm` | GitHub Copilot (or any Language Model Chat Provider extension) | 1–3 s | one consent prompt; not available in Cursor |
 | `claude-cli` | Claude Code CLI signed in (subscription or key) | ~2 s amortized | one call per **function**, a pool of persistent sessions, `--effort low`; API-key env vars are hidden so it can only use your login |
 | `cursor-cli` | Cursor Agent CLI, `agent login` once | ? | reuses the Cursor subscription; pick the model (effort is in its name) from the status bar |
@@ -172,7 +173,7 @@ Plenty of extensions explain a *selection* (Copilot, Continue, Cody, Ollama fron
 narrate a *walkthrough* a coding agent wrote (AI Code Walkthrough, Agent Walkthrough, Code
 Walkthrough — Claude-backed). CodeTour plays recorded tours. What they do not do is the debugger
 part: deterministic stepping through the call graph, branch choice, exception flow, breakpoints,
-step back — with the explanation following you. That is the gap Explain Mode fills, locally.
+step back — with the explanation following you. That is the gap DeBuddy fills, locally — a placebo debugger: no side effects, real results.
 
 ## License
 

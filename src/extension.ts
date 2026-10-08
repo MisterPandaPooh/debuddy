@@ -49,7 +49,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.debug.registerDebugConfigurationProvider('explain', {
       resolveDebugConfiguration(_folder, config) {
         const editor = vscode.window.activeTextEditor;
-        if (!config.type && editor) config = { type: 'explain', request: 'launch', name: 'Explain Mode' };
+        if (!config.type && editor) config = { type: 'explain', request: 'launch', name: 'DeBuddy' };
         if (!config.file && editor) {
           config.file = editor.document.uri.fsPath;
           config.line = editor.selection.active.line + 1;
@@ -57,12 +57,12 @@ export function activate(context: vscode.ExtensionContext) {
         return config.file ? config : undefined;
       },
     }),
-    // Shows "Explain Mode: Start Here" in the F5 / Run and Debug picker, even with no launch.json.
+    // Shows "DeBuddy: Start Here" in the F5 / Run and Debug picker, even with no launch.json.
     vscode.debug.registerDebugConfigurationProvider(
       'explain',
       {
         provideDebugConfigurations: () => [
-          { type: 'explain', request: 'launch', name: 'Explain Mode: Start Here' },
+          { type: 'explain', request: 'launch', name: 'DeBuddy: Start Here' },
         ],
       },
       vscode.DebugConfigurationProviderTriggerKind.Dynamic,
@@ -70,7 +70,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('explain.autoWalk', async () => {
       const session = vscode.debug.activeDebugSession;
       if (session?.type !== 'explain') {
-        void vscode.window.showInformationMessage('Start Explain Mode first (Cmd+Alt+E), then auto-walk.');
+        void vscode.window.showInformationMessage('Start DeBuddy first (Cmd+Alt+E), then auto-walk.');
         return;
       }
       try {
@@ -96,7 +96,7 @@ export function activate(context: vscode.ExtensionContext) {
       });
       if (key === undefined) return;
       await registry.setApiKey(key);
-      void vscode.window.showInformationMessage(key ? 'Explain Mode: API key saved.' : 'Explain Mode: API key cleared.');
+      void vscode.window.showInformationMessage(key ? 'DeBuddy: API key saved.' : 'DeBuddy: API key cleared.');
     }),
     vscode.commands.registerCommand('explain.startHere', () => {
       const editor = vscode.window.activeTextEditor;
@@ -105,7 +105,7 @@ export function activate(context: vscode.ExtensionContext) {
       return vscode.debug.startDebugging(folder, {
         type: 'explain',
         request: 'launch',
-        name: 'Explain Mode',
+        name: 'DeBuddy',
         file: editor.document.uri.fsPath,
         line: editor.selection.active.line + 1,
       });

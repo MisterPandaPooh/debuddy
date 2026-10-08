@@ -12,7 +12,7 @@ labels: bug
 
 **Provider** (status bar shows it, e.g. `embedded · Qwen2.5-Coder 3B`)
 
-**Output log** — View → Output → "Explain Mode", the lines around the problem:
+**Output log** — View → Output → "DeBuddy", the lines around the problem:
 
 ```
 paste here
