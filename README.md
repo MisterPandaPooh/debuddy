@@ -24,8 +24,6 @@
   <a href="https://open-vsx.org/extension/MisterPandaPooh/debuddy"><img alt="Open VSX (Cursor)" src="https://img.shields.io/open-vsx/v/MisterPandaPooh/debuddy?label=Open%20VSX%20%28Cursor%29&color=7c3aed"></a>
   <a href="https://github.com/MisterPandaPooh/debuddy/releases"><img alt="Download" src="https://img.shields.io/badge/download-VSIX-2ea44f"></a>
   <a href="https://github.com/MisterPandaPooh/debuddy/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MisterPandaPooh/debuddy/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="VS Code" src="https://img.shields.io/badge/VS%20Code-%E2%89%A5%201.95-blue">
-  <img alt="Cursor" src="https://img.shields.io/badge/Cursor-supported-7c3aed">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey">
 </p>
 
