@@ -34,7 +34,7 @@
 ---
 
 You open a function you did not write. Instead of reading it top to bottom and guessing, you
-**start DeBuddy on a line and press F10**. The next statement lights up, and a short card
+**start DeBuddy on a line and press <kbd>F10</kbd>**. The next statement lights up, and a short card
 appears right under it:
 
 > **Does** Fetches the user by id and attaches its roles.
@@ -42,9 +42,9 @@ appears right under it:
 > **Watch** ⚠️ Returns null when the id is unknown.
 > **Throws** 🔥 NotFoundError (from getUser) — caught by `catch (err)` L23
 
-Press **F11** on a call and you are inside the callee, with a one-line summary, where it is
-called from, and the reason you came. **Shift+F11** brings you back. Reach an `if` and F10 asks
-which branch to read. Reach a `throw` and F10 takes you to the `catch` that receives it — or
+Press <kbd>F11</kbd> on a call and you are inside the callee, with a one-line summary, where it is
+called from, and the reason you came. <kbd>⇧</kbd>+<kbd>F11</kbd> brings you back. Reach an `if … else` and <kbd>F10</kbd> asks
+which branch to read. Reach a `throw` and <kbd>F10</kbd> takes you to the `catch` that receives it — or
 tells you it leaves the function.
 
 **It feels like a debugger because it *is* one** — a real VS Code Debug Adapter, with the native
@@ -74,16 +74,16 @@ an OpenAI-compatible API, the Claude Code CLI or the Cursor CLI — see [Provide
 
 | Do this | You get |
 |---|---|
-| Put the cursor on a line, `Cmd/Ctrl+Alt+E` | the session starts there; the first card appears |
-| `F10` | next statement, explained |
-| `F11` on `getUser(id)` | inside `getUser`, with its summary and who calls it |
-| `Shift+F11` | back to the call site, on the next statement |
-| `F10` on an `if … else` | *then / else / both* — pick the path to read |
-| `F10` / `F11` on a lone `if` or a loop | the condition's value is unknown: `F10` stays on the main path (skips the block), `F11` reads it; guards (`if (x) return …`) are flagged as such |
-| `F10` on a `throw` | jumps to the `catch` that receives it, or says it leaves the function |
+| Put the cursor on a line, <kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>E</kbd> (Win/Linux <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd>) | the session starts there; the first card appears |
+| <kbd>F10</kbd> | next statement, explained |
+| <kbd>F11</kbd> on `getUser(id)` | inside `getUser`, with its summary and who calls it |
+| <kbd>⇧</kbd>+<kbd>F11</kbd> | back to the call site, on the next statement |
+| <kbd>F10</kbd> on an `if … else` | *then / else / both* — pick the path to read |
+| <kbd>F10</kbd> / <kbd>F11</kbd> on a lone `if` or a loop | the condition's value is unknown: <kbd>F10</kbd> stays on the main path (skips the block), <kbd>F11</kbd> reads it; guards (`if (x) return …`) are flagged as such |
+| <kbd>F10</kbd> on a `throw` | jumps to the `catch` that receives it, or says it leaves the function |
 | 💥 (toolbar) on a call that *may* throw | follows that possibility instead of the happy path |
-| `F9` then `F5` | runs silently to the breakpoint — across calls, like a debugger |
-| ▶▶ (toolbar) or `Cmd/Ctrl+Alt+A` | **auto-walk**: advances every few seconds; `F6` pauses |
+| <kbd>F9</kbd> then <kbd>F5</kbd> | runs silently to the breakpoint — across calls, like a debugger |
+| ▶▶ (toolbar) or <kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>A</kbd> | **auto-walk**: advances every few seconds; <kbd>F6</kbd> pauses |
 | ◀ Step Back | previous stops, call stack included |
 | hover a variable | an example value that matches its type (`user = { id: "u_42" } // or: null`) |
 | type in the Debug Console | a question about the current line, answered with its context |
