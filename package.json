@@ -42,7 +42,14 @@
       "debug/toolbar": [
         {
           "command": "explain.autoWalk",
-          "when": "debugType == explain && debugState == stopped",
+          "when": "debugType == 'explain'",
+          "group": "navigation@0"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "explain.autoWalk",
+          "when": "debugType == 'explain'",
           "group": "navigation@0"
         }
       ]
@@ -58,7 +65,7 @@
         "command": "explain.autoWalk",
         "key": "ctrl+alt+a",
         "mac": "cmd+alt+a",
-        "when": "debugType == explain && debugState == stopped"
+        "when": "inDebugMode"
       }
     ],
     "breakpoints": [
@@ -147,7 +154,12 @@
           "description": "On Step Over at an `if`, ask which branch to follow; the other one is skipped."
         }
       }
-    }
+    },
+    "activationEvents": [
+      "onDebug",
+      "onCommand:explain.startHere",
+      "onCommand:explain.autoWalk"
+    ]
   },
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
