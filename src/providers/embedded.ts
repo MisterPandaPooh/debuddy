@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { errMsg } from '../util';
 import type { ChatProvider } from './types';
 
 // The one embedded model: the measured sweet spot (bench/RESULTS.md). Other sizes go through Ollama.
@@ -69,7 +70,7 @@ export async function downloadEmbeddedModel(dir: string, id: string): Promise<st
         void vscode.window.showInformationMessage(`Explain Mode: ${path.basename(file)} is ready.`);
         return file;
       } catch (err) {
-        if (!token.isCancellationRequested) void vscode.window.showErrorMessage(`Download failed: ${err instanceof Error ? err.message : String(err)}`);
+        if (!token.isCancellationRequested) void vscode.window.showErrorMessage(`Download failed: ${errMsg(err)}`);
         return undefined;
       }
     },

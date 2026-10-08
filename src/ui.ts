@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { errMsg } from './util';
 import { ExampleValue, Explanation } from './explain';
 import { supportedLanguageIds } from './lang';
 import { Branch, Step } from './lang';
@@ -12,11 +13,8 @@ export interface ShowOptions {
   lands?: string;
 }
 
-/**
- * Example values for the statement the walkthrough is stopped on, merged into the editor's
- * normal hover (the debug hover is disabled: it would replace the language hover and error
- * on anything that is not a declared variable).
- */
+/** Example values for the current statement, merged into the normal hover — the debug hover is
+ * disabled because it would replace the language hover and error on non-variables. */
 export class HoverValues implements vscode.HoverProvider {
   private uri?: string;
   private values: ExampleValue[] = [];
@@ -128,7 +126,7 @@ export class ExplainUi implements vscode.Disposable {
   }
 
   showError(uri: vscode.Uri, line: number, err: unknown) {
-    this.render(uri, line, `⚠️ ${err instanceof Error ? err.message : String(err)}`);
+    this.render(uri, line, `⚠️ ${errMsg(err)}`);
   }
 
   private render(uri: vscode.Uri, line: number, markdown: string) {

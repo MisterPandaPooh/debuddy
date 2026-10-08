@@ -1,20 +1,51 @@
 {
   "name": "explain-mode",
   "displayName": "Explain Mode",
-  "description": "Step through code like a debugger; a local LLM explains each statement.",
-  "version": "0.0.1",
+  "description": "Step through code like a debugger \u2014 nothing runs, a local model explains each statement in place.",
+  "version": "0.1.0",
   "publisher": "netanelcs",
-  "private": true,
+  "license": "MIT",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MisterPandaPooh/explain-mode.git"
+  },
+  "homepage": "https://github.com/MisterPandaPooh/explain-mode#readme",
+  "bugs": {
+    "url": "https://github.com/MisterPandaPooh/explain-mode/issues"
+  },
+  "keywords": [
+    "explain",
+    "walkthrough",
+    "debugger",
+    "code reading",
+    "onboarding",
+    "llm",
+    "local",
+    "ollama",
+    "llama.cpp",
+    "typescript",
+    "python",
+    "rust"
+  ],
+  "categories": [
+    "Debuggers",
+    "Education",
+    "AI",
+    "Programming Languages"
+  ],
+  "galleryBanner": {
+    "color": "#1e2240",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.95.0"
   },
-  "categories": [
-    "Debuggers",
-    "Programming Languages"
-  ],
   "activationEvents": [
     "onDebug",
-    "onCommand:explain.startHere"
+    "onCommand:explain.startHere",
+    "onCommand:explain.autoWalk",
+    "onCommand:explain.configure"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -402,12 +433,7 @@
           "description": "Advanced: GGUF for the embedded provider, as hf:<owner>/<repo>/<file.gguf>. The default is the measured sweet spot; for other sizes use Ollama."
         }
       }
-    },
-    "activationEvents": [
-      "onDebug",
-      "onCommand:explain.startHere",
-      "onCommand:explain.autoWalk"
-    ]
+    }
   },
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:node-llama-cpp --external:web-tree-sitter --format=cjs --platform=node --sourcemap && node scripts/copy-grammars.js",
@@ -420,11 +446,6 @@
     "test:dap:batch": "EXPLAIN_SLOW=1 npm run test:dap",
     "test:lang": "esbuild src/lang/index.ts --bundle --platform=node --format=cjs --external:web-tree-sitter --outfile=test/lang.bundle.js --alias:vscode=./test/vscode-stub.js && node scripts/copy-grammars.js && node test/lang.js"
   },
-  "devDependencies": {
-    "@types/node": "^22",
-    "@types/vscode": "^1.95.0",
-    "esbuild": "^0.25.0"
-  },
   "dependencies": {
     "@vscode/debugadapter": "^1.68.0",
     "@vscode/debugprotocol": "^1.68.0",
@@ -433,5 +454,10 @@
     "tree-sitter-rust": "^0.24.0",
     "typescript": "^5.9.3",
     "web-tree-sitter": "^0.27.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/vscode": "^1.95.0",
+    "esbuild": "^0.25.0"
   }
 }

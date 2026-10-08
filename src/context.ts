@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { Explainer, StatementContext } from './explain';
-import { Frame, Step, frameAt, hoverText, resolveProjectCallee, typeDefinitionText } from './lang';
+import { Frame, Step, calleeFrame, hoverText, typeDefinitionText } from './lang';
 import { TestIndex } from './tests';
 
 const STDLIB = /^(console|Math|JSON|Object|Array|Promise|String|Number|Date|Map|Set|parseInt|parseFloat|fetch|setTimeout)\b/;
@@ -20,10 +20,7 @@ export async function stepThrows(frame: Frame, step: Step): Promise<string[]> {
   if (step.mayThrow) out.push(`${step.mayThrow} (conditional)`);
   for (const call of step.calls) {
     if (STDLIB.test(call.name)) continue;
-    const loc = await resolveProjectCallee(frame.uri, call);
-    if (!loc) continue;
-    const target = await vscode.workspace.openTextDocument(loc.uri);
-    const callee = await frameAt(target, loc.range.start.line + 1);
+    const callee = await calleeFrame(frame.uri, call);
     if (callee) out.push(...callee.throws.map((t) => `${t} (from ${call.name})`));
   }
   return out;
@@ -40,11 +37,9 @@ export async function buildContext(frame: Frame, step: Step, src: ContextSources
 
   for (const call of step.calls) {
     if (STDLIB.test(call.name)) continue;
-    const loc = await resolveProjectCallee(frame.uri, call);
-    if (loc) {
+    const callee = await calleeFrame(frame.uri, call);
+    {
       // Project function: feed its cached one-line summary (works better than raw code on a 3B).
-      const target = await vscode.workspace.openTextDocument(loc.uri);
-      const callee = await frameAt(target, loc.range.start.line + 1);
       if (callee) {
         if (src.slow?.()) {
           // One round-trip matters more than tokens: a big model reads the callee itself.
@@ -111,10 +106,8 @@ export async function buildFunctionContext(frame: Frame, src: ContextSources): P
   for (const step of frame.steps) {
     for (const call of step.calls) {
       if (STDLIB.test(call.name) || callees.has(call.name)) continue;
-      const loc = await resolveProjectCallee(frame.uri, call);
-      if (loc) {
-        const target = await vscode.workspace.openTextDocument(loc.uri);
-        const callee = await frameAt(target, loc.range.start.line + 1);
+      const callee = await calleeFrame(frame.uri, call);
+      {
         if (callee) {
           callees.set(call.name, `${call.name}:\n${excerpt(callee.source, 25)}`);
           throws.push(...callee.throws.map((t) => `${t} (from ${call.name}) at L${step.line}`));
@@ -161,11 +154,8 @@ function definitionDepth(): number {
   return vscode.workspace.getConfiguration('explain.context').get<number>('definitionDepth', 2);
 }
 
-/**
- * One-line summary of a function, informed by the summaries of its own project callees
- * down to `depth` levels, its throw sites and the tests that describe it.
- * Without those facts a small model invents behaviour.
- */
+/** One-line summary of a function from its callees' summaries (to `depth`), throw sites and tests —
+ * without those facts a small model invents behaviour. */
 export async function summarizeFrame(
   frame: Frame,
   src: ContextSources,
@@ -180,10 +170,7 @@ export async function summarizeFrame(
     const calls = frame.steps.flatMap((s) => s.calls).filter((c) => !STDLIB.test(c.name) && !seen.has(c.name) && seen.add(c.name));
     const results = await Promise.all(
       calls.map(async (call) => {
-        const loc = await resolveProjectCallee(frame.uri, call);
-        if (!loc) return undefined;
-        const doc = await vscode.workspace.openTextDocument(loc.uri);
-        const callee = await frameAt(doc, loc.range.start.line + 1);
+        const callee = await calleeFrame(frame.uri, call);
         if (!callee || visited.has(`${callee.uri.fsPath}:${callee.startLine}`)) return undefined;
         return `${call.name}: ${await summarizeFrame(callee, src, depth - 1, visited)}`;
       }),

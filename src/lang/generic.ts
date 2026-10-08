@@ -2,11 +2,8 @@ import * as vscode from 'vscode';
 import { KeywordProfile, defaultKeywordProfile, keywordProfiles } from './keywords';
 import { Branch, CallSite, Frame, LanguageSupport, Step } from './types';
 
-/**
- * Any language with a language server: function boundaries from document symbols, statement
- * boundaries from selection ranges (VS Code's "Expand Selection"), the rest from small per-language
- * keyword tables. Less exact than a grammar, but it works wherever the user can already code.
- */
+/** Any language with a language server: functions from document symbols, statements from selection
+ * ranges ("Expand Selection"), the rest from keyword tables. Works wherever the user can already code. */
 export const genericLanguage: LanguageSupport = {
   languages: ['*'],
   frameAt: genericFrameAt,

@@ -1,5 +1,6 @@
 import { execFile } from 'child_process';
 import * as vscode from 'vscode';
+import { errMsg } from './util';
 import { DEFAULT_EMBEDDED, EMBEDDED_LABEL, downloadEmbeddedModel, isEmbeddedModelDownloaded } from './providers/embedded';
 import { supportedLanguageIds } from './lang';
 import { ProviderKind } from './providers/types';
@@ -60,7 +61,7 @@ export async function pullOllamaModel(url: string, name: string): Promise<boolea
         return true;
       } catch (err) {
         if (ctrl.signal.aborted) return false;
-        void vscode.window.showErrorMessage(`Download failed: ${err instanceof Error ? err.message : String(err)}`);
+        void vscode.window.showErrorMessage(`Download failed: ${errMsg(err)}`);
         return false;
       }
     },

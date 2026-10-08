@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { errMsg } from './util';
 import {
   ContinuedEvent,
   DebugSession,
@@ -15,7 +16,7 @@ import {
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { ContextSources, buildContext, buildFunctionContext, stepThrows, summarizeFrame } from './context';
 import { ExampleValue, Explanation, StatementContext } from './explain';
-import { Frame, Step, frameAt, hoverText, referencesOf, resolveProjectCallee } from './lang';
+import { Frame, Step, calleeFrame, frameAt, hoverText, referencesOf, stepIntoReason } from './lang';
 import { ExplainUi } from './ui';
 
 const THREAD_ID = 1;
@@ -178,7 +179,7 @@ export class ExplainSession extends DebugSession {
       ok(`${expr}: not a variable declared in ${this.top?.name ?? 'this function'}() (static walkthrough, no runtime values)`);
     } catch (err) {
       this.log(`evaluate: ${err}`);
-      ok(`(unavailable: ${err instanceof Error ? err.message : String(err)})`);
+      ok(`(unavailable: ${errMsg(err)})`);
     }
   }
 
@@ -211,6 +212,11 @@ export class ExplainSession extends DebugSession {
     while (prev && this.history.length && !['breakpoint', 'entry'].includes(prev.reason)) prev = this.history.pop();
     if (prev) this.restore(prev);
     void this.stopAt(prev?.reason === 'breakpoint' ? 'breakpoint' : 'step');
+  }
+
+  /** Remember where we are, so Step Back / Reverse Continue can come back to it. */
+  private snapshot(reason: string) {
+    this.history.push({ stack: [...this.stack], indices: this.stack.map((f) => f.index), reason });
   }
 
   private restore(snap: { stack: Frame[]; indices: number[] }) {
@@ -292,7 +298,7 @@ export class ExplainSession extends DebugSession {
   /** Move to where an exception from the current statement lands; false when nothing catches it. */
   private unwindToHandler(): boolean {
     const what = this.currentThrows[0] ?? 'the exception';
-    this.history.push({ stack: [...this.stack], indices: this.stack.map((f) => f.index), reason: 'throw' });
+    this.snapshot('throw');
     const unwound: string[] = [];
     while (this.stack.length) {
       const frame = this.top;
@@ -401,7 +407,7 @@ export class ExplainSession extends DebugSession {
         }
       }
       if (run.cancelled) return;
-      this.history.push({ stack: [...this.stack], indices: this.stack.map((f) => f.index), reason: 'auto' });
+      this.snapshot('auto');
       const frame = this.top;
       const step = frame.steps[frame.index];
       const bps = [...(this.breakpoints.get(frame.uri.fsPath) ?? [])];
@@ -424,11 +430,7 @@ export class ExplainSession extends DebugSession {
     const caller = this.top;
     const step = caller.steps[caller.index];
     for (const call of step.calls) {
-      const loc = await resolveProjectCallee(caller.uri, call);
-      if (!loc) continue;
-      const doc = await vscode.workspace.openTextDocument(loc.uri);
-      const reason = `stepped into from ${caller.name}(), which runs: ${step.text}`;
-      const frame = await frameAt(doc, loc.range.start.line + 1, reason);
+      const frame = await calleeFrame(caller.uri, call, stepIntoReason(caller, step));
       if (!frame) continue;
       this.stack.push(frame);
       void this.stopAt(this.functionBreakpoints.has(frame.name) ? 'function breakpoint' : 'step', true);
@@ -476,12 +478,9 @@ export class ExplainSession extends DebugSession {
     const caller = this.top;
     const step = caller.steps[caller.index];
     for (const call of step.calls) {
-      const loc = await resolveProjectCallee(caller.uri, call);
-      if (!loc) continue;
-      const bps = this.breakpoints.get(loc.uri.fsPath);
-      const doc = await vscode.workspace.openTextDocument(loc.uri);
-      const frame = await frameAt(doc, loc.range.start.line + 1, `stepped into from ${caller.name}(), which runs: ${step.text}`);
+      const frame = await calleeFrame(caller.uri, call, stepIntoReason(caller, step));
       if (!frame) continue;
+      const bps = this.breakpoints.get(frame.uri.fsPath);
       const last = frame.steps[frame.steps.length - 1];
       const hasLine = [...(bps ?? [])].some((l) => l >= frame.startLine && l <= last.endLine);
       if (!hasLine && !this.functionBreakpoints.has(frame.name)) continue;
@@ -540,7 +539,7 @@ export class ExplainSession extends DebugSession {
   private async stopAt(reason: string, entered = false) {
     const frame = this.top;
     const step = frame.steps[frame.index];
-    this.history.push({ stack: [...this.stack], indices: this.stack.map((f) => f.index), reason });
+    this.snapshot(reason);
     this.log(`stop(${reason}) ${frame.name}() L${step.line}: ${step.text.split('\n')[0]}`);
     this.ui.clearHighlight();
     this.sendEvent(new StoppedEvent(reason, THREAD_ID));
@@ -696,11 +695,6 @@ export class ExplainSession extends DebugSession {
       this.batches.set(key, p);
     }
     return p;
-  }
-
-  /** Where Step Over would land, without moving. */
-  private peekNext(): { frame: Frame; step: Step } | undefined {
-    return this.peekAhead(1)[0];
   }
 
   /** The next `n` statements along the Step Over path (current frame, then callers), without moving. */

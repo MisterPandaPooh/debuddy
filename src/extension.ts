@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
+import { errMsg } from './util';
 import { ExplainSession } from './adapter';
-import { initLanguages, supportedLanguageIds } from './lang';
+import { initLanguages } from './lang';
 import { PromptExplainer } from './explain';
 import { ProviderRegistry } from './providers/registry';
 import { SettingsUi } from './settingsUi';
@@ -72,7 +73,7 @@ export function activate(context: vscode.ExtensionContext) {
       try {
         await session.customRequest('autoWalk');
       } catch (err) {
-        void vscode.window.showErrorMessage(`Auto-walk failed: ${err instanceof Error ? err.message : String(err)}`);
+        void vscode.window.showErrorMessage(`Auto-walk failed: ${errMsg(err)}`);
       }
     }),
     vscode.commands.registerCommand('explain.followThrow', async () => {
@@ -81,7 +82,7 @@ export function activate(context: vscode.ExtensionContext) {
       try {
         await session.customRequest('followThrow');
       } catch (err) {
-        void vscode.window.showErrorMessage(`Follow throw failed: ${err instanceof Error ? err.message : String(err)}`);
+        void vscode.window.showErrorMessage(`Follow throw failed: ${errMsg(err)}`);
       }
     }),
     vscode.commands.registerCommand('explain.setApiKey', async () => {

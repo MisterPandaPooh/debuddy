@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    name: typecheck · harness · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Debug Adapter harness
+        run: |
+          npm run test:dap
+          npm run test:dap:auto
+          npm run test:dap:throw
+          npm run test:dap:batch
+      - name: Language walkers
+        run: npm run test:lang
+
+  package:
+    name: package (${{ matrix.target }})
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: darwin-arm64
+          - os: macos-13
+            target: darwin-x64
+          - os: ubuntu-latest
+            target: linux-x64
+          - os: windows-latest
+            target: win32-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # Installs this platform's llama.cpp binary only; the VSIX is therefore per target.
+      - run: npm ci
+      - run: npm run build
+      - run: npx @vscode/vsce package --target ${{ matrix.target }} --out explain-mode-${{ matrix.target }}.vsix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: explain-mode-${{ matrix.target }}
+          path: explain-mode-${{ matrix.target }}.vsix

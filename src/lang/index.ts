@@ -74,6 +74,19 @@ export function isSupported(doc: vscode.TextDocument): boolean {
   return exactLanguageIds.includes(doc.languageId) || keywordProfileFor(doc.languageId).languages[0] !== '*' || supportedLanguageIds.includes(doc.languageId);
 }
 
+/** The callee of a call as a frame (resolve, open, walk) — the one shape six call sites shared. */
+export async function calleeFrame(uri: vscode.Uri, call: CallSite, reason = ''): Promise<Frame | undefined> {
+  const loc = await resolveProjectCallee(uri, call);
+  if (!loc) return undefined;
+  const doc = await vscode.workspace.openTextDocument(loc.uri);
+  return frameAt(doc, loc.range.start.line + 1, reason);
+}
+
+/** Why a frame was entered, as shown in its header and given to the model. */
+export function stepIntoReason(caller: Frame, step: { text: string }): string {
+  return `stepped into from ${caller.name}(), which runs: ${step.text}`;
+}
+
 /** Build the frame for the function containing `line` in whatever language the document is. */
 export async function frameAt(doc: vscode.TextDocument, line: number, reason = ''): Promise<Frame | undefined> {
   return languageFor(doc).frameAt(doc, line, reason);
