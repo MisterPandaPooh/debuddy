@@ -19,6 +19,51 @@ const KINDS: { provider: ProviderKind; label: string; detail: string }[] = [
   { provider: 'openai', label: 'OpenAI-compatible API', detail: 'OpenRouter, OpenAI, LM Studio, vLLM — needs a key' },
 ];
 
+/** `ollama pull` through the API, with a cancellable progress notification. */
+export async function pullOllamaModel(url: string, name: string): Promise<boolean> {
+  return vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: `Explain Mode: downloading ${name}`, cancellable: true },
+    async (progress, token) => {
+      const ctrl = new AbortController();
+      token.onCancellationRequested(() => ctrl.abort());
+      try {
+        const res = await fetch(`${url}/api/pull`, { method: 'POST', body: JSON.stringify({ name, stream: true }), signal: ctrl.signal });
+        if (!res.ok || !res.body) throw new Error(`Ollama ${res.status}: ${await res.text()}`);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        let lastPct = 0;
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let i;
+          while ((i = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, i).trim();
+            buf = buf.slice(i + 1);
+            if (!line) continue;
+            const msg = JSON.parse(line) as { status?: string; total?: number; completed?: number; error?: string };
+            if (msg.error) throw new Error(msg.error);
+            if (msg.total && msg.completed !== undefined) {
+              const pct = Math.floor((msg.completed / msg.total) * 100);
+              progress.report({ message: `${pct}% of ${(msg.total / 1e9).toFixed(1)} GB`, increment: pct - lastPct });
+              lastPct = pct;
+            } else if (msg.status) {
+              progress.report({ message: msg.status });
+            }
+          }
+        }
+        void vscode.window.showInformationMessage(`Explain Mode: ${name} is ready.`);
+        return true;
+      } catch (err) {
+        if (ctrl.signal.aborted) return false;
+        void vscode.window.showErrorMessage(`Download failed: ${err instanceof Error ? err.message : String(err)}`);
+        return false;
+      }
+    },
+  );
+}
+
 /** Status bar entry + QuickPick to switch provider/model without opening the settings page. */
 export class SettingsUi implements vscode.Disposable {
   private item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
@@ -85,12 +130,7 @@ export class SettingsUi implements vscode.Disposable {
         const name = pick.id ?? (await vscode.window.showInputBox({ prompt: 'Ollama model', value: c.get('model') }));
         if (!name) return;
         await set('model', name);
-        if (pick.pull) {
-          // The download runs where the user can see it; the setting already points at the model.
-          const term = vscode.window.createTerminal('Explain Mode: ollama pull');
-          term.show();
-          term.sendText(`ollama pull ${name}`);
-        }
+        if (pick.pull) await pullOllamaModel(c.get<string>('ollamaUrl', 'http://localhost:11434'), name);
         return;
       }
       case 'claude-cli': {
