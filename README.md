@@ -6,8 +6,8 @@
 
 <p align="center">
   <b>The placebo debugger. Nothing runs. Everything gets explained.</b><br>
-  Step through code like a debugger — F10 · F11 · breakpoints · call stack · branch choice · follow the exception —<br>
-  while a local model explains each statement in place. On code you have never read.
+  <b>An AI that explains your code line by line, through a debugger interface.</b><br>
+  F10 · F11 · breakpoints · call stack · branch choice · follow the exception — a local model explains each statement in place, on code you have never read.
 </p>
 
 <table align="center">
