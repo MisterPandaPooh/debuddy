@@ -1,11 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import type { ChatProvider } from './providers';
+import type { ChatProvider } from './types';
 
 // The one embedded model: the measured sweet spot (bench/RESULTS.md). Other sizes go through Ollama.
 export const DEFAULT_EMBEDDED = 'hf:Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/qwen2.5-coder-3b-instruct-q4_k_m.gguf';
 export const EMBEDDED_LABEL = 'Qwen2.5-Coder 3B (2.1 GB)';
+export const EMBEDDED_SIZE_GB = 2.1;
 
 type Llama = typeof import('node-llama-cpp');
 
@@ -28,8 +29,25 @@ export function isEmbeddedModelDownloaded(dir: string, id: string): boolean {
   }
 }
 
+/** Ask before the first download; the user may prefer Ollama. Returns false when declined. */
+export async function confirmEmbeddedDownload(id: string): Promise<boolean> {
+  const name = id.split('/').pop()?.replace(/\.gguf$/, '') ?? id;
+  const size = id === DEFAULT_EMBEDDED ? ` (${EMBEDDED_SIZE_GB} GB)` : '';
+  const choice = await vscode.window.showInformationMessage(
+    `Explain Mode needs a local model: ${name}${size}. Download it now into the extension storage?`,
+    { modal: true, detail: 'One-time download from Hugging Face. You can switch to Ollama or another provider instead.' },
+    'Download',
+    'Use Ollama instead',
+  );
+  if (choice === 'Use Ollama instead') {
+    await vscode.workspace.getConfiguration('explain').update('provider', 'ollama', vscode.ConfigurationTarget.Global);
+  }
+  return choice === 'Download';
+}
+
 /** Download a GGUF into `dir` with a cancellable progress notification. Resolves to the file path. */
 export async function downloadEmbeddedModel(dir: string, id: string): Promise<string | undefined> {
+  if (!(await confirmEmbeddedDownload(id))) return undefined;
   const { createModelDownloader } = await loadLlamaCpp();
   return vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: `Explain Mode: downloading ${id.split('/').pop()}`, cancellable: true },
@@ -76,7 +94,7 @@ export class EmbeddedProvider implements ChatProvider, vscode.Disposable {
       const llama = await loadLlamaCpp();
       if (!isEmbeddedModelDownloaded(this.dir, this.id)) {
         const file = await downloadEmbeddedModel(this.dir, this.id);
-        if (!file) throw new Error('model download cancelled');
+        if (!file) throw new Error('model download declined or cancelled — pick a provider in the status bar');
       }
       const engine = await llama.getLlama();
       const model = await engine.loadModel({ modelPath: embeddedModelPath(this.dir, this.id) });

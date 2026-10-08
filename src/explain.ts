@@ -1,5 +1,5 @@
 import type { FunctionContext } from './context';
-import { ChatProvider } from './providers';
+import { ChatProvider } from './providers/types';
 
 export interface Explanation {
   does: string;

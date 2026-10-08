@@ -1,96 +1,6 @@
 import { spawn } from 'child_process';
-import * as vscode from 'vscode';
-
-/** One chat completion. Every provider reduces to this; the prompts live in explain.ts. */
-export interface ChatProvider {
-  readonly name: string;
-  /** Seconds per call rather than milliseconds: callers batch and prefetch more aggressively. */
-  readonly slow?: boolean;
-  chat(system: string, user: string, maxTokens: number): Promise<string>;
-}
-
-export type ProviderKind = 'embedded' | 'ollama' | 'openai' | 'vscode-lm' | 'claude-cli' | 'cursor-cli';
-
-/** Ollama's native API (default: local, small, fast). */
-export class OllamaProvider implements ChatProvider {
-  readonly name: string;
-  constructor(private opts: { url: string; model: string }) {
-    this.name = `ollama/${opts.model}`;
-  }
-
-  async chat(system: string, user: string, maxTokens: number): Promise<string> {
-    const res = await fetch(`${this.opts.url}/api/chat`, {
-      method: 'POST',
-      body: JSON.stringify({
-        model: this.opts.model,
-        stream: false,
-        think: false, // reasoning models (qwen3…) answer directly
-        options: { temperature: 0.2, num_predict: maxTokens },
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-      }),
-    });
-    if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text()}`);
-    const json = (await res.json()) as { message: { content: string } };
-    return json.message.content;
-  }
-}
-
-/** Any OpenAI-compatible `/chat/completions`: OpenAI, OpenRouter, LM Studio, vLLM, Ollama's /v1. */
-export class OpenAICompatibleProvider implements ChatProvider {
-  readonly name: string;
-  constructor(private opts: { baseUrl: string; model: string; apiKey?: string }) {
-    this.name = `openai/${opts.model}`;
-  }
-
-  async chat(system: string, user: string, maxTokens: number): Promise<string> {
-    const res = await fetch(`${this.opts.baseUrl.replace(/\/$/, '')}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...(this.opts.apiKey ? { authorization: `Bearer ${this.opts.apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        model: this.opts.model,
-        temperature: 0.2,
-        max_tokens: maxTokens,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-      }),
-    });
-    if (!res.ok) throw new Error(`${this.name} ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    const json = (await res.json()) as { choices: { message: { content: string } }[] };
-    return json.choices[0]?.message.content ?? '';
-  }
-}
-
-/** Models registered in VS Code (Copilot, or any Language Model Chat Provider extension). */
-export class VscodeLmProvider implements ChatProvider {
-  readonly name: string;
-  constructor(private opts: { vendor?: string; family?: string }) {
-    this.name = `vscode-lm/${opts.family ?? opts.vendor ?? 'any'}`;
-  }
-
-  async chat(system: string, user: string, maxTokens: number): Promise<string> {
-    const [model] = await vscode.lm.selectChatModels({
-      ...(this.opts.vendor ? { vendor: this.opts.vendor } : {}),
-      ...(this.opts.family ? { family: this.opts.family } : {}),
-    });
-    if (!model) throw new Error(`no VS Code language model matches ${this.name} (is Copilot signed in?)`);
-    const res = await model.sendRequest(
-      [vscode.LanguageModelChatMessage.User(`${system}\n\n---\n\n${user}`)],
-      { modelOptions: { max_tokens: maxTokens, temperature: 0.2 } },
-      new vscode.CancellationTokenSource().token,
-    );
-    let out = '';
-    for await (const chunk of res.text) out += chunk;
-    return out;
-  }
-}
+import { run } from './cli';
+import { ChatProvider } from './types';
 
 // Flags that skip Claude Code's session bootstrap (MCP servers, hooks) — the login still applies.
 const CLAUDE_SLIM = ['--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--no-session-persistence', '--tools', ''];
@@ -111,19 +21,6 @@ function loginHint(msg: string): string {
   return NOT_LOGGED_IN.test(msg) ? `${msg} — open a terminal, run \`claude\` and type /login (subscription), then retry` : msg;
 }
 
-function run(bin: string, args: string[], stdin?: string, cwd?: string, env?: NodeJS.ProcessEnv): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd, env });
-    let out = '';
-    let err = '';
-    child.stdout.on('data', (d) => (out += d));
-    child.stderr.on('data', (d) => (err += d));
-    child.on('error', reject);
-    child.on('close', (code) => (code === 0 ? resolve(out) : reject(new Error(loginHint(`${bin} exited ${code}: ${(err || out).slice(0, 200)}`)))));
-    child.stdin.end(stdin ?? '');
-  });
-}
-
 /** The Claude Code CLI, one process per call: reuses the user's login (subscription or key). ~7–10 s. */
 export class ClaudeCliProvider implements ChatProvider {
   readonly name: string;
@@ -135,7 +32,7 @@ export class ClaudeCliProvider implements ChatProvider {
   chat(system: string, user: string): Promise<string> {
     const args = ['-p', '--output-format', 'text', '--system-prompt', system, ...CLAUDE_SLIM, ...(this.opts.extraArgs ?? [])];
     if (this.opts.model) args.push('--model', this.opts.model);
-    return run(this.opts.bin || 'claude', args, user, undefined, claudeEnv(this.opts.auth));
+    return run(this.opts.bin || 'claude', args, { stdin: user, env: claudeEnv(this.opts.auth), hint: loginHint });
   }
 }
 
@@ -250,25 +147,5 @@ export class ClaudeSessionProvider implements ChatProvider {
 
   dispose() {
     for (const s of this.sessions) s.dispose();
-  }
-}
-
-/** Cursor's Agent CLI (`agent -p`): reuses the Cursor subscription. Needs `agent login` once. */
-export class CursorCliProvider implements ChatProvider {
-  readonly name: string;
-  readonly slow = true;
-  constructor(private opts: { model?: string; bin?: string; workspace?: string; extraArgs?: string[] }) {
-    this.name = `cursor-cli/${opts.model || 'default'}`;
-  }
-
-  chat(system: string, user: string): Promise<string> {
-    // No system-prompt flag: fold the instructions into the prompt. `--trust` skips the workspace prompt.
-    const args = ['-p', '--output-format', 'text', '--trust', ...(this.opts.extraArgs ?? [])];
-    if (this.opts.workspace) args.push('--workspace', this.opts.workspace);
-    // Tolerate "--model x" pasted into the setting.
-    const model = this.opts.model?.replace(/^--model\s+/, '').trim();
-    if (model) args.push('--model', model);
-    args.push(`${system}\n\n---\n\n${user}`);
-    return run(this.opts.bin || 'agent', args, undefined, this.opts.workspace);
   }
 }

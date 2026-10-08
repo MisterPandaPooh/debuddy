@@ -1,7 +1,7 @@
 import { execFile } from 'child_process';
 import * as vscode from 'vscode';
-import { DEFAULT_EMBEDDED, EMBEDDED_LABEL, downloadEmbeddedModel, isEmbeddedModelDownloaded } from './embedded';
-import { ProviderKind } from './providers';
+import { DEFAULT_EMBEDDED, EMBEDDED_LABEL, downloadEmbeddedModel, isEmbeddedModelDownloaded } from './providers/embedded';
+import { ProviderKind } from './providers/types';
 
 // Measured in bench/RESULTS.md: above ~2 GB latency grows faster than accuracy with this prompt.
 const OLLAMA_TIERS = [

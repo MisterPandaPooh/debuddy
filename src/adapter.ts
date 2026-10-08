@@ -15,7 +15,7 @@ import {
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { ContextSources, buildContext, buildFunctionContext, stepThrows, summarizeFrame } from './context';
 import { ExampleValue, Explanation, StatementContext } from './explain';
-import { Frame, Step, frameAt, hoverText, referencesOf, resolveProjectCallee } from './navigator';
+import { Frame, Step, frameAt, hoverText, referencesOf, resolveProjectCallee } from './lang';
 import { ExplainUi } from './ui';
 
 const THREAD_ID = 1;

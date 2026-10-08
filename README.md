@@ -49,11 +49,16 @@ npm run bench          # prompt bench against the local model (bench/*.mjs)
 code --extensionDevelopmentPath="$PWD" "$PWD/sample"   # Extension Development Host
 ```
 
-Layout: `src/adapter.ts` (Debug Adapter: stepping, breakpoints, auto-walk, evaluate),
-`src/navigator.ts` (TS AST → steps, calls, branches, throws; LSP lookups),
-`src/context.ts` (what the model sees: callee summaries, types, tests, throws),
-`src/explain.ts` (prompts + Ollama adapter), `src/tests.ts` (test titles as spec),
-`src/ui.ts` (comment thread, highlight, status, branch picker).
+Layout:
+
+- `src/adapter.ts` — Debug Adapter: stepping, breakpoints, auto-walk, throw flow, evaluate.
+- `src/lang/` — languages: `types.ts` (Step/Frame), `lsp.ts` (definition/hover/references through
+  VS Code), `typescript.ts` (the TS/JS AST walker), `index.ts` (registry; add a language there).
+- `src/providers/` — one file per model backend (`embedded`, `ollama`, `openai`, `vscodeLm`,
+  `claude`, `cursor`), `cli.ts` (shared process runner), `registry.ts` (settings → provider).
+- `src/context.ts` — what the model sees; `src/explain.ts` — prompts and parsing;
+  `src/tests.ts` — test titles as spec; `src/ui.ts` — comment thread, hover, highlight, pickers;
+  `src/settingsUi.ts` — status bar and provider/model QuickPicks.
 
 ## VS Code gotchas met here (all silent)
 

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ExampleValue, Explanation } from './explain';
-import { Branch, Step } from './navigator';
+import { Branch, Step } from './lang';
 
 export interface ShowOptions {
   header?: string;

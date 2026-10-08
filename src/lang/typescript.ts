@@ -1,49 +1,6 @@
 import * as ts from 'typescript';
 import * as vscode from 'vscode';
-
-/** One "step": a statement the user can stop on. Lines are 1-based. */
-export interface Step {
-  line: number;
-  endLine: number;
-  text: string;
-  /** Project calls made by this statement, with the callee identifier position. */
-  calls: { name: string; position: vscode.Position }[];
-  /** Variables this statement declares (incl. destructuring), for example values. */
-  declared: { name: string; position: vscode.Position }[];
-  /** For `if` heads: the line ranges of each branch body, so the user can pick a path. */
-  branches?: Branch[];
-  /** The `catch` step that would receive an exception thrown here, if the step is inside a `try`. */
-  handler?: { line: number; text: string };
-  /** For `throw` statements: the error being thrown. Certain, so stepping follows it. */
-  throwsSelf?: string;
-  /** A `throw` nested in a one-line statement (`if (x) throw …`). Possible, not certain. */
-  mayThrow?: string;
-}
-
-export interface Branch {
-  label: string;
-  from: number;
-  to: number;
-}
-
-/** A function the user is stepping through. */
-export interface Frame {
-  uri: vscode.Uri;
-  name: string;
-  /** Signature + body, as shown to the model. */
-  source: string;
-  startLine: number;
-  steps: Step[];
-  index: number;
-  /** Why we stepped into this frame (empty for the entry frame). */
-  reason: string;
-  /** Error classes thrown directly in this function body (not in nested functions). */
-  throws: string[];
-  /** Position of the function name, for reference lookups; absent for anonymous functions. */
-  namePosition?: vscode.Position;
-  /** Line ranges the user chose not to explore (the other side of an `if`). */
-  skip: Branch[];
-}
+import { Frame, LanguageSupport, Step } from './types';
 
 type FnNode = ts.FunctionLikeDeclaration;
 
@@ -213,7 +170,7 @@ function collectDeclared(s: ts.Statement, doc: vscode.TextDocument): Step['decla
 }
 
 /** Build the frame for the function containing `line` (1-based); `undefined` if none. */
-export function frameAt(doc: vscode.TextDocument, line: number, reason = ''): Frame | undefined {
+function frameAt(doc: vscode.TextDocument, line: number, reason = ''): Frame | undefined {
   const sf = parse(doc);
   const offset = doc.offsetAt(new vscode.Position(line - 1, 0).translate(0, doc.lineAt(line - 1).firstNonWhitespaceCharacterIndex));
   const fn = enclosingFunction(sf, offset);
@@ -237,62 +194,7 @@ export function frameAt(doc: vscode.TextDocument, line: number, reason = ''): Fr
   };
 }
 
-/** Resolve a call to a definition inside the workspace (never node_modules). */
-export async function resolveProjectCallee(
-  uri: vscode.Uri,
-  call: Step['calls'][number],
-): Promise<vscode.Location | undefined> {
-  const defs = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(
-    'vscode.executeDefinitionProvider',
-    uri,
-    call.position,
-  );
-  for (const d of defs ?? []) {
-    const loc = 'targetUri' in d ? new vscode.Location(d.targetUri, d.targetSelectionRange ?? d.targetRange) : d;
-    const inWorkspace = vscode.workspace.getWorkspaceFolder(loc.uri) !== undefined;
-    if (inWorkspace && !loc.uri.fsPath.includes('node_modules') && !loc.uri.fsPath.endsWith('.d.ts')) return loc;
-  }
-  return undefined;
-}
-
-/** Declaration text of the type behind a variable (interface/type/class), trimmed; project types only. */
-export async function typeDefinitionText(uri: vscode.Uri, position: vscode.Position): Promise<string[]> {
-  const defs = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(
-    'vscode.executeTypeDefinitionProvider',
-    uri,
-    position,
-  );
-  const out: string[] = [];
-  for (const d of (defs ?? []).slice(0, 3)) {
-    const loc = 'targetUri' in d ? new vscode.Location(d.targetUri, d.targetRange) : d;
-    if (loc.uri.fsPath.includes('node_modules') || loc.uri.fsPath.includes('/typescript/lib/')) continue;
-    const doc = await vscode.workspace.openTextDocument(loc.uri);
-    const text = doc.getText(loc.range).split('\n').slice(0, 12).join(' ').replace(/\s+/g, ' ').trim();
-    if (text) out.push(text.slice(0, 240));
-  }
-  return out;
-}
-
-/** Files that reference the symbol at `position`, as "basename:line" (excluding `position` itself). */
-export async function referencesOf(uri: vscode.Uri, position: vscode.Position, limit = 5): Promise<string[]> {
-  const refs = await vscode.commands.executeCommand<vscode.Location[]>('vscode.executeReferenceProvider', uri, position);
-  const out: string[] = [];
-  for (const r of refs ?? []) {
-    if (r.uri.fsPath === uri.fsPath && r.range.start.line === position.line) continue;
-    if (r.uri.fsPath.includes('node_modules')) continue;
-    const name = r.uri.fsPath.split('/').pop();
-    out.push(`${name}:${r.range.start.line + 1}`);
-    if (out.length >= limit) break;
-  }
-  return out;
-}
-
-/** Hover text for a position, flattened to one line. */
-export async function hoverText(uri: vscode.Uri, position: vscode.Position): Promise<string | undefined> {
-  const hovers = await vscode.commands.executeCommand<vscode.Hover[]>('vscode.executeHoverProvider', uri, position);
-  const parts = (hovers ?? []).flatMap((h) =>
-    h.contents.map((c) => (typeof c === 'string' ? c : c.value)),
-  );
-  const text = parts.join(' ').replace(/```\w*/g, '').replace(/\s+/g, ' ').trim();
-  return text ? text.slice(0, 200) : undefined;
-}
+export const typescriptLanguage: LanguageSupport = {
+  languages: ['typescript', 'javascript', 'typescriptreact', 'javascriptreact'],
+  frameAt,
+};

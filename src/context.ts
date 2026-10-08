@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { Explainer, StatementContext } from './explain';
-import { Frame, Step, frameAt, hoverText, resolveProjectCallee, typeDefinitionText } from './navigator';
+import { Frame, Step, frameAt, hoverText, resolveProjectCallee, typeDefinitionText } from './lang';
 import { TestIndex } from './tests';
 
 const STDLIB = /^(console|Math|JSON|Object|Array|Promise|String|Number|Date|Map|Set|parseInt|parseFloat|fetch|setTimeout)\b/;
