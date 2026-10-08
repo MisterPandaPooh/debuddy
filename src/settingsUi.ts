@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { errMsg } from './util';
 import { DEFAULT_EMBEDDED, EMBEDDED_LABEL, downloadEmbeddedModel, isEmbeddedModelDownloaded } from './providers/embedded';
 import { supportedLanguageIds } from './lang';
+import { resolveCursorBin } from './providers/cursor';
 import { ProviderKind } from './providers/types';
 
 // Measured in bench/RESULTS.md: above ~2 GB latency grows faster than accuracy with this prompt.
@@ -155,7 +156,14 @@ export class SettingsUi implements vscode.Disposable {
       }
       case 'cursor-cli': {
         // Effort is part of the model id at Cursor (-low / -high / -fast): picking the model picks the effort.
-        const models = await this.cursorModels(c.get<string>('cursor.bin') || 'agent');
+        let bin: string;
+        try {
+          bin = resolveCursorBin(c.get<string>('cursor.bin') || undefined);
+        } catch (err) {
+          void vscode.window.showWarningMessage(errMsg(err));
+          return;
+        }
+        const models = await this.cursorModels(bin);
         if (!models.length) {
           void vscode.window.showWarningMessage('Cursor CLI returned no models — run `agent login` in a terminal first.');
           return;
