@@ -39,14 +39,14 @@
           "group": "navigation@1"
         }
       ],
-      "debug/toolbar": [
+      "editor/title": [
         {
           "command": "explain.autoWalk",
           "when": "explain.active",
           "group": "navigation@0"
         }
       ],
-      "editor/title": [
+      "debug/toolBar": [
         {
           "command": "explain.autoWalk",
           "when": "explain.active",
