@@ -314,6 +314,21 @@
             "Let the claude process see your environment as is (an ANTHROPIC_API_KEY there would be used and billed)."
           ],
           "description": "How the Claude CLI authenticates."
+        },
+        "explain.batchPerFunction": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "always",
+            "never"
+          ],
+          "default": "auto",
+          "enumDescriptions": [
+            "One call per function on seconds-per-call providers (CLI ones), one call per statement on fast local models.",
+            "Always one call per function (long answers: fine for big models, risky for a 3B).",
+            "Always one call per statement."
+          ],
+          "description": "Explain a whole function in a single model call and cache every statement from it."
         }
       }
     },
@@ -330,7 +345,8 @@
     "bench": "node bench/bench.mjs",
     "test:dap": "esbuild src/adapter.ts --bundle --platform=node --format=cjs --outfile=test/adapter.bundle.js --alias:vscode=./test/vscode-stub.js && node test/dap.js",
     "test:dap:auto": "EXPLAIN_AUTO=1 npm run test:dap",
-    "test:dap:throw": "npm run test:dap >/dev/null && EXPLAIN_SCENARIO=throw node test/dap.js test/fixtures/throwflow.ts 3 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 13 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 10"
+    "test:dap:throw": "npm run test:dap >/dev/null && EXPLAIN_SCENARIO=throw node test/dap.js test/fixtures/throwflow.ts 3 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 13 && EXPLAIN_SCENARIO=next node test/dap.js test/fixtures/throwflow.ts 10",
+    "test:dap:batch": "EXPLAIN_SLOW=1 npm run test:dap"
   },
   "devDependencies": {
     "@types/node": "^22",

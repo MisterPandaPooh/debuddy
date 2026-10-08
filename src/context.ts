@@ -84,6 +84,72 @@ export async function buildContext(frame: Frame, step: Step, src: ContextSources
   };
 }
 
+/** Everything the model needs to explain every statement of a function, resolved once (LSP only). */
+export interface FunctionContext {
+  name: string;
+  file: string;
+  /** Source with 1-based line numbers prefixed. */
+  numbered: string;
+  /** "L<line>: <text>" for each step, in order. */
+  statements: { line: number; text: string }[];
+  /** Deduplicated project callees with a code excerpt. */
+  callees: string[];
+  hovers: string[];
+  /** "name: type — expanded" for every declared variable, prefixed by its line. */
+  vars: string[];
+  /** "Error (from fn) at L<line>". */
+  throws: string[];
+  tests: string[];
+  reason: string;
+}
+
+export async function buildFunctionContext(frame: Frame, src: ContextSources): Promise<FunctionContext> {
+  const callees = new Map<string, string>();
+  const hovers: string[] = [];
+  const vars: string[] = [];
+  const throws: string[] = [];
+  for (const step of frame.steps) {
+    for (const call of step.calls) {
+      if (STDLIB.test(call.name) || callees.has(call.name)) continue;
+      const loc = await resolveProjectCallee(frame.uri, call);
+      if (loc) {
+        const target = await vscode.workspace.openTextDocument(loc.uri);
+        const callee = frameAt(target, loc.range.start.line + 1);
+        if (callee) {
+          callees.set(call.name, `${call.name}:\n${excerpt(callee.source, 25)}`);
+          throws.push(...callee.throws.map((t) => `${t} (from ${call.name}) at L${step.line}`));
+          continue;
+        }
+      }
+      if (call.name.includes('.')) {
+        const h = await hoverText(frame.uri, call.position);
+        if (h) hovers.push(`${call.name}: ${h}`);
+      }
+    }
+    if (step.throwsSelf) throws.push(`${step.throwsSelf} at L${step.line}`);
+    if (step.mayThrow) throws.push(`${step.mayThrow} (conditional) at L${step.line}`);
+    for (const d of step.declared) {
+      const h = await hoverText(frame.uri, d.position);
+      const type = h?.replace(/^\(?(const|let|var)\)?\s*[\w$]+:\s*/, '') ?? 'unknown';
+      const expanded = await typeDefinitionText(frame.uri, d.position);
+      vars.push(`L${step.line} ${d.name}: ${type}${expanded.length ? ' — ' + expanded.join(' ; ') : ''}`);
+    }
+  }
+  const numbered = frame.source.split('\n').map((l, i) => `${String(frame.startLine + i).padStart(4)}  ${l}`).join('\n');
+  return {
+    name: frame.name,
+    file: frame.uri.fsPath.split('/').pop() ?? '',
+    numbered,
+    statements: frame.steps.map((s) => ({ line: s.line, text: s.text.split('\n')[0] })),
+    callees: [...callees.values()],
+    hovers,
+    vars,
+    throws,
+    tests: await src.tests.titlesFor(frame.name),
+    reason: frame.reason,
+  };
+}
+
 /** First `n` lines of a function, with an ellipsis when cut. */
 function excerpt(source: string, n: number): string {
   const lines = source.split('\n');

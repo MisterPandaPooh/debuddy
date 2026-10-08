@@ -1,3 +1,4 @@
+import type { FunctionContext } from './context';
 import { ChatProvider } from './providers';
 
 export interface Explanation {
@@ -29,9 +30,17 @@ export interface StatementContext {
   reason: string;
 }
 
+/** Result of one whole-function call: a summary plus one entry per statement line. */
+export interface FunctionExplanation {
+  summary: string;
+  byLine: Map<number, Explanation & { values: ExampleValue[] }>;
+}
+
 export interface Explainer {
   /** `values` is set when the provider answered both in one call (slow providers). */
   explainStatement(ctx: StatementContext): Promise<Explanation & { values?: ExampleValue[] }>;
+  /** Every statement of a function in a single round-trip (for seconds-per-call providers). */
+  explainFunction(ctx: FunctionContext): Promise<FunctionExplanation>;
   exampleValues(ctx: StatementContext): Promise<ExampleValue[]>;
   /** `hints` are one-line summaries of the function's own callees ("name: summary"). */
   summarizeFunction(source: string, reason: string, hints?: string[]): Promise<string>;
@@ -66,6 +75,21 @@ const COMBINED_VALUES_RULE = `
 Then, after "Watch", add a section:
 Values:
 <one line per declared variable: name = tiny example conforming to its type | alternative when null/undefined/fallback is possible>`;
+
+const FUNCTION_SYSTEM = `You explain every statement of one function to a developer who will step through it like a debugger.
+Rules:
+- Use ONLY the context given (the function, the known functions, the types, the tests). Never guess what unknown code does.
+- Max 12 words per line. No code fences, no backticks, no extra commentary.
+- "Does" and "Watch" describe only that statement; "Why" is its role in the function.
+- "Watch" is a real pitfall visible in the context (null result, thrown error, fallback, side effect, await), otherwise "-".
+- "Values": one line per variable the statement declares, "name = tiny example matching its type | alternative when null/undefined/fallback is possible". Omit the Values line for statements that declare nothing.
+Output exactly, in this order, one block per listed statement using its exact id:
+Summary: <what the function does, at most 25 words, mention thrown errors and fallbacks>
+L<line>:
+Does: <...>
+Why: <...>
+Watch: <... or ->
+Values: <...>`;
 
 const VALUES_SYSTEM = `You invent ONE plausible example value for each variable a statement assigns, for a developer reading code.
 Rules:
@@ -103,6 +127,21 @@ export class PromptExplainer implements Explainer {
     const text = await this.chat(EXPLAIN_SYSTEM + COMBINED_VALUES_RULE, prompt, 200);
     const [head, tail = ''] = text.split(/^Values:\s*$/m);
     return { ...parseExplanation(head), values: parseValues(tail, ctx.vars.map((v) => v.split(':')[0].trim())) };
+  }
+
+  async explainFunction(ctx: FunctionContext): Promise<FunctionExplanation> {
+    const parts = [
+      `Function ${ctx.name}() in ${ctx.file}:\n${ctx.numbered}`,
+      `Statements to explain (use these ids):\n${ctx.statements.map((s) => `L${s.line}: ${s.text}`).join('\n')}`,
+    ];
+    if (ctx.callees.length) parts.push(`Known functions (project code called here):\n${ctx.callees.join('\n\n')}`);
+    if (ctx.hovers.length) parts.push(`Hover info:\n${ctx.hovers.join('\n')}`);
+    if (ctx.vars.length) parts.push(`Declared variables (type after the colon):\n${ctx.vars.join('\n')}`);
+    if (ctx.throws.length) parts.push(`May throw: ${ctx.throws.join(', ')}`);
+    if (ctx.tests.length) parts.push(`Tests describing ${ctx.name}:\n${ctx.tests.map((t) => '- ' + t).join('\n')}`);
+    if (ctx.reason) parts.push(`Context: ${ctx.reason}`);
+    const text = await this.chat(FUNCTION_SYSTEM, parts.join('\n\n'), 120 * ctx.statements.length + 100);
+    return parseFunctionExplanation(text, ctx);
   }
 
   async exampleValues(ctx: StatementContext): Promise<ExampleValue[]> {
@@ -155,6 +194,23 @@ export function parseExplanation(text: string): Explanation {
   if (!out.does) out.does = text.trim();
   if (out.watch === '-') out.watch = '';
   return out;
+}
+
+export function parseFunctionExplanation(text: string, ctx: FunctionContext): FunctionExplanation {
+  const summary = text.match(/^Summary:\s*(.+)$/mi)?.[1].trim() ?? '';
+  const byLine = new Map<number, Explanation & { values: ExampleValue[] }>();
+  const declared = new Map(ctx.vars.map((v) => [Number(v.match(/^L(\d+)/)?.[1]), v.replace(/^L\d+\s+/, '').split(':')[0].trim()]));
+  const chunks = text.split(/^L(\d+):\s*$/m); // [preamble, line, block, line, block, …]
+  for (let i = 1; i + 1 < chunks.length; i += 2) {
+    const line = Number(chunks[i]);
+    const block = chunks[i + 1];
+    const e = parseExplanation(block);
+    if (!block.match(/^Does:/mi)) continue; // id echoed without content: leave it to the per-line fallback
+    const names = [...declared.entries()].filter(([l]) => l === line).map(([, n]) => n);
+    const values = parseValues(block.split(/^Values:\s*/mi)[1] ?? '', names);
+    byLine.set(line, { ...e, values });
+  }
+  return { summary, byLine };
 }
 
 export function parseValues(text: string, names: string[]): ExampleValue[] {

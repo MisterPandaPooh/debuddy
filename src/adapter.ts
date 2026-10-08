@@ -13,7 +13,7 @@ import {
   Thread,
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
-import { ContextSources, buildContext, stepThrows, summarizeFrame } from './context';
+import { ContextSources, buildContext, buildFunctionContext, stepThrows, summarizeFrame } from './context';
 import { ExampleValue, Explanation, StatementContext } from './explain';
 import { Frame, Step, frameAt, hoverText, referencesOf, resolveProjectCallee } from './navigator';
 import { ExplainUi } from './ui';
@@ -48,6 +48,10 @@ export class ExplainSession extends DebugSession {
   private explainToken = 0;
   /** Explanations by statement, so the next step (prefetched) and Step Back are instant. */
   private prepared = new Map<string, Promise<Prepared>>();
+  /** One in-flight whole-function call per frame (slow providers): fills `prepared` for every step. */
+  private batches = new Map<string, Promise<Map<number, Prepared>>>();
+  /** Function summaries obtained from a batch, so the step-into header costs nothing. */
+  private summaries = new Map<string, string>();
   /** The running auto-walk, if any; cancelled by Pause, breakpoints, end or disconnect. */
   private auto?: { cancelled: boolean; wake: () => void };
   /** Exception breakpoint filters chosen in the Breakpoints view. */
@@ -605,8 +609,12 @@ export class ExplainSession extends DebugSession {
 
   private async frameHeader(frame: Frame): Promise<string> {
     const depth = vscode.workspace.getConfiguration('explain.context').get<number>('definitionDepth', 2);
+    const batchKey = `${frame.uri.fsPath}:${frame.startLine}:${frame.source.length}`;
     const [summary, callers] = await Promise.all([
-      summarizeFrame(frame, this.src, depth),
+      // With a per-function batch the summary comes with it: wait for the batch instead of a second call.
+      this.batchPerFunction()
+        ? this.prepareFunction(frame).then(() => this.summaries.get(batchKey) ?? summarizeFrame(frame, this.src, depth))
+        : summarizeFrame(frame, this.src, depth),
       frame.namePosition ? referencesOf(frame.uri, frame.namePosition) : Promise.resolve([]),
     ]);
     const from = callers.length ? `\n\n_Called from: ${callers.join(', ')}_` : '';
@@ -619,6 +627,12 @@ export class ExplainSession extends DebugSession {
     let p = this.prepared.get(key);
     if (!p) {
       p = (async () => {
+        // Seconds-per-call provider: one call explains the whole function; every step reads from it.
+        if (this.batchPerFunction()) {
+          const hit = (await this.prepareFunction(frame)).get(step.line);
+          if (hit) return hit;
+          this.log(`batch: L${step.line} missing from the function answer, falling back to a per-line call`);
+        }
         const ctx = await buildContext(frame, step, this.src);
         const explanation = await this.src.explainer.explainStatement(ctx);
         const values = explanation.values ? Promise.resolve(explanation.values) : this.src.explainer.exampleValues(ctx);
@@ -626,6 +640,47 @@ export class ExplainSession extends DebugSession {
       })();
       p.catch(() => this.prepared.delete(key));
       this.prepared.set(key, p);
+    }
+    return p;
+  }
+
+  private batchPerFunction(): boolean {
+    const mode = vscode.workspace.getConfiguration('explain').get<'auto' | 'always' | 'never'>('batchPerFunction', 'auto');
+    return mode === 'always' || (mode === 'auto' && (this.src.slow?.() ?? false));
+  }
+
+  /** Context resolved once, one model call, results keyed by statement line. */
+  private prepareFunction(frame: Frame): Promise<Map<number, Prepared>> {
+    const key = `${frame.uri.fsPath}:${frame.startLine}:${frame.source.length}`;
+    let p = this.batches.get(key);
+    if (!p) {
+      p = (async () => {
+        const t0 = Date.now();
+        const fctx = await buildFunctionContext(frame, this.src);
+        const answer = await this.src.explainer.explainFunction(fctx);
+        if (answer.summary) this.summaries.set(key, answer.summary);
+        const out = new Map<number, Prepared>();
+        for (const step of frame.steps) {
+          const e = answer.byLine.get(step.line);
+          if (!e) continue;
+          // Per-statement context is still needed by hover/console and for the Throws line.
+          const ctx: StatementContext = {
+            enclosing: fctx.numbered,
+            statement: step.text,
+            callees: fctx.callees,
+            hovers: fctx.hovers,
+            vars: fctx.vars.filter((v) => v.startsWith(`L${step.line} `)).map((v) => v.replace(/^L\d+\s+/, '')),
+            throws: await stepThrows(frame, step),
+            tests: fctx.tests,
+            reason: frame.reason,
+          };
+          out.set(step.line, { ctx, explanation: e, values: Promise.resolve(e.values) });
+        }
+        this.log(`batch: ${frame.name}() — ${out.size}/${frame.steps.length} statements in one call, ${Date.now() - t0} ms`);
+        return out;
+      })();
+      p.catch(() => this.batches.delete(key));
+      this.batches.set(key, p);
     }
     return p;
   }
@@ -652,6 +707,8 @@ export class ExplainSession extends DebugSession {
   /** Settings changed (provider, context…): what was prepared no longer matches. */
   invalidate() {
     this.prepared.clear();
+    this.batches.clear();
+    this.summaries.clear();
     this.explainToken++;
   }
 }
