@@ -4,19 +4,49 @@ One-time setup, then a release is a tag push.
 
 ## 1. VS Code Marketplace (one time)
 
-1. Sign in at <https://marketplace.visualstudio.com/manage> with a Microsoft account and create
-   the publisher **`MisterPandaPooh`** — the id must equal `"publisher"` in `package.json`.
-2. Create a Personal Access Token at <https://dev.azure.com> → user settings → *Personal access
-   tokens* → **Organization: All accessible organizations**, **Scopes: Marketplace → Manage**,
-   expiry up to one year.
-3. Store it in the repo (never in a file): `gh secret set VSCE_PAT` and paste the token.
+Global Azure DevOps PATs are retired on **2026-12-01**. The durable setup is Microsoft Entra ID
+with a federated credential: GitHub proves who it is through OIDC, nothing expires, no secret to
+rotate. The PAT path still works until then and is kept as a fallback in the workflow.
+
+### Publisher
+
+Sign in at <https://marketplace.visualstudio.com/manage> with a Microsoft account and create the
+publisher **`MisterPandaPooh`** — the id must equal `"publisher"` in `package.json`.
+
+### Entra ID identity for GitHub Actions (recommended, no secret)
+
+1. <https://entra.microsoft.com> (same Microsoft account; a free tenant is enough, no Azure
+   subscription needed) → *App registrations* → **New registration** → name `debuddy-publisher`,
+   single tenant. Note the **Application (client) ID** and the **Directory (tenant) ID**.
+2. In the app → *Certificates & secrets* → **Federated credentials** → *Add* → scenario
+   **GitHub Actions deploying Azure resources**: organization `MisterPandaPooh`, repository
+   `debuddy`, entity type **Environment**, environment name **`marketplace`**. Save.
+3. Back on <https://marketplace.visualstudio.com/manage> → publisher → **Members** → *Add* → paste
+   the app's **Application (client) ID**, role **Contributor**. (If the page cannot find it, add it
+   after a first `az login` as that app and the `az rest … /profiles/me` call from the VS Code docs.)
+4. GitHub repo → *Settings → Environments* → **New environment** `marketplace` (optionally require
+   your approval before each publish). In it, add two **variables** (not secrets):
+   `AZURE_CLIENT_ID` and `AZURE_TENANT_ID`.
+
+That is all: the `Release` workflow signs in with `azure/login` (OIDC) and runs
+`vsce publish --azure-credential` for each VSIX.
+
+### PAT (works until 2026-12-01)
+
+Azure DevOps → user settings → *Personal access tokens* → **Organization: All accessible
+organizations**, **Scopes: Marketplace → Manage**; then `gh secret set VSCE_PAT`.
+
+### No automation at all
+
+Upload the four VSIX files by hand on the management page (first one with *New extension*, the
+others with *⋯ → Update*). No token of any kind; five minutes per release.
 
 ## 2. Open VSX — Cursor, VSCodium, Gitpod (one time)
 
 1. Sign in at <https://open-vsx.org> with GitHub, accept the Eclipse publisher agreement
    (Profile → *Publisher Agreement*), create an access token (Profile → *Access Tokens*).
 2. Create the namespace once: `npx ovsx create-namespace MisterPandaPooh -p <token>`.
-3. `gh secret set OVSX_PAT` and paste the token.
+3. `gh secret set OVSX_PAT` and paste the token (Open VSX is not affected by the Azure PAT retirement; rotate it when it expires).
 
 Without these secrets the release workflow still builds the VSIX files and attaches them to a
 GitHub release; only the two publish steps are skipped.

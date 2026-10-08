@@ -51,8 +51,15 @@ jobs:
     name: GitHub release + publish
     needs: package
     runs-on: ubuntu-latest
-    # `secrets` cannot be read in step `if`s; copy them into env and test that instead.
+    # The `marketplace` environment carries the Entra ID variables; OIDC needs id-token: write.
+    environment: marketplace
+    permissions:
+      contents: write
+      id-token: write
+    # `secrets`/`vars` cannot be read in step `if`s; copy them into env and test that instead.
     env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       VSCE_PAT: ${{ secrets.VSCE_PAT }}
       OVSX_PAT: ${{ secrets.OVSX_PAT }}
     steps:
@@ -69,9 +76,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Publish to the VS Code Marketplace
-        if: env.VSCE_PAT != ''
+
+      # Preferred, no secret at all: GitHub's OIDC token is exchanged for a Microsoft Entra ID token
+      # (federated credential on the app registration), then vsce publishes with it.
+      - name: Sign in to Microsoft Entra ID (OIDC, no secret)
+        if: env.AZURE_CLIENT_ID != ''
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Publish to the VS Code Marketplace (Entra ID)
+        if: env.AZURE_CLIENT_ID != ''
+        run: for f in vsix/*.vsix; do npx @vscode/vsce publish --azure-credential --packagePath "$f"; done
+
+      # Fallback until global PATs are retired on 2026-12-01.
+      - name: Publish to the VS Code Marketplace (PAT)
+        if: env.AZURE_CLIENT_ID == '' && env.VSCE_PAT != ''
         run: for f in vsix/*.vsix; do npx @vscode/vsce publish --packagePath "$f"; done
+
       - name: Publish to Open VSX (Cursor, VSCodium)
         if: env.OVSX_PAT != ''
         run: for f in vsix/*.vsix; do npx ovsx publish "$f" -p "$OVSX_PAT"; done
