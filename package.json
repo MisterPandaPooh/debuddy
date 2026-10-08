@@ -283,8 +283,8 @@
             "medium",
             "high"
           ],
-          "default": "",
-          "description": "--effort passed to the Claude CLI. Empty = CLI default."
+          "default": "low",
+          "description": "--effort passed to the Claude CLI. 'low' is 3x faster on long answers (measured: 300 words in 16 s vs 50 s) with no visible loss on explanations. Empty = CLI default."
         },
         "explain.claude.extraArgs": {
           "type": "array",

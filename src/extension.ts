@@ -135,7 +135,7 @@ class ProviderRegistry implements vscode.Disposable {
       case 'vscode-lm':
         return new VscodeLmProvider({ vendor: c.get<string>('vscodeLm.vendor') || undefined, family: c.get<string>('vscodeLm.family') || undefined });
       case 'claude-cli': {
-        const effort = c.get<string>('claude.effort', '');
+        const effort = c.get<string>('claude.effort', 'low');
         const opts = {
           model: c.get<string>('claude.model') || undefined,
           bin: c.get<string>('claude.bin') || undefined,
