@@ -16,7 +16,7 @@ import { DebugProtocol } from '@vscode/debugprotocol';
 import { ContextSources, buildContext, stepThrows, summarizeFrame } from './context';
 import { ExampleValue, Explanation, StatementContext } from './explain';
 import { Frame, Step, frameAt, hoverText, referencesOf, resolveProjectCallee } from './navigator';
-import { ExplainUi, ShowOptions } from './ui';
+import { ExplainUi } from './ui';
 
 const THREAD_ID = 1;
 
@@ -314,11 +314,6 @@ export class ExplainSession extends DebugSession {
       if (this.stack.length) void this.followThrow();
       return;
     }
-    if (command === 'expand') {
-      this.sendResponse(response);
-      void this.expand();
-      return;
-    }
     if (command !== 'autoWalk') return super.customRequest(command, response, args);
     this.sendResponse(response);
     this.log(`autoWalk requested (auto already running: ${!!this.auto}, stack: ${this.stack.length})`);
@@ -540,27 +535,7 @@ export class ExplainSession extends DebugSession {
 
   /** One-shot header for the next presentation (set by followThrow). */
   private pendingHeader?: string;
-  /** What the thread currently shows, so "expand" can re-render it with the long form appended. */
-  private shown?: { uri: vscode.Uri; line: number; explanation: Explanation; opts: ShowOptions };
 
-  /** Re-explain the current statement with the expand provider and append it to the thread. */
-  private async expand() {
-    const ctx = this.context;
-    const shown = this.shown;
-    if (!ctx || !shown) return void vscode.window.setStatusBarMessage('Explain: nothing to expand yet', 3000);
-    const token = this.explainToken;
-    const dispose = vscode.window.setStatusBarMessage(`$(sync~spin) Explain: asking ${this.src.providerName('expand')}…`);
-    try {
-      const more = await this.src.explainer.expand(ctx);
-      if (token !== this.explainToken) return;
-      this.ui.show(shown.uri, shown.line, shown.explanation, { ...shown.opts, more });
-    } catch (err) {
-      this.log(`expand: ${err}`);
-      void vscode.window.showErrorMessage(`Expand failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      dispose.dispose();
-    }
-  }
 
   /** Explain the current statement and refresh the UI; shared by stops and auto mode. */
   private async present(reason: string, entered: boolean) {
@@ -601,9 +576,7 @@ export class ExplainSession extends DebugSession {
             : step.branches
               ? '_F10 will ask which branch to follow._'
               : undefined;
-      const opts: ShowOptions = { header, footer, throws: ctx.throws, lands };
-      this.shown = { uri: frame.uri, line: step.line, explanation, opts };
-      this.ui.show(frame.uri, step.line, explanation, opts);
+      this.ui.show(frame.uri, step.line, explanation, { header, footer, throws: ctx.throws, lands });
       this.sendEvent(new InvalidatedEvent(['variables'], THREAD_ID));
       // Values are a second local call; let them land after the explanation without blocking it.
       void values.then((v) => {

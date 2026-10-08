@@ -8,11 +8,7 @@ import { ExplainUi } from './ui';
 export function activate(context: vscode.ExtensionContext) {
   const ui = new ExplainUi();
   const registry = new ProviderRegistry(context.secrets);
-  const src = {
-    explainer: new PromptExplainer(registry),
-    tests: new TestIndex(),
-    providerName: (role: 'main' | 'expand') => registry.kind(role),
-  };
+  const src = { explainer: new PromptExplainer(() => registry.current()), tests: new TestIndex() };
 
   // Own context key for menus/keybindings: set while an Explain session is the active one.
   const setActive = (on: boolean) => vscode.commands.executeCommand('setContext', 'explain.active', on);
@@ -69,11 +65,6 @@ export function activate(context: vscode.ExtensionContext) {
         void vscode.window.showErrorMessage(`Follow throw failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }),
-    vscode.commands.registerCommand('explain.expand', async () => {
-      const session = vscode.debug.activeDebugSession;
-      if (session?.type !== 'explain') return;
-      await session.customRequest('expand');
-    }),
     vscode.commands.registerCommand('explain.setApiKey', async () => {
       const key = await vscode.window.showInputBox({
         prompt: 'API key for the OpenAI-compatible provider (stored in VS Code secret storage, never in settings)',
@@ -113,20 +104,9 @@ class ProviderRegistry {
     else await this.secrets.delete('explain.openai.apiKey');
   }
 
-  kind(role: 'main' | 'expand'): ProviderKind {
+  current(): ChatProvider {
     const c = vscode.workspace.getConfiguration('explain');
-    const main = c.get<ProviderKind>('provider', 'ollama');
-    if (role === 'main') return main;
-    const expand = c.get<ProviderKind | 'same'>('expandProvider', 'same');
-    return expand === 'same' ? main : expand;
-  }
-
-  main = () => this.build(this.kind('main'));
-  expand = () => this.build(this.kind('expand'));
-
-  private build(kind: ProviderKind): ChatProvider {
-    const c = vscode.workspace.getConfiguration('explain');
-    switch (kind) {
+    switch (c.get<ProviderKind>('provider', 'ollama')) {
       case 'openai':
         return new OpenAICompatibleProvider({
           baseUrl: c.get<string>('openai.baseUrl', 'https://openrouter.ai/api/v1'),

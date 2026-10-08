@@ -9,8 +9,6 @@ const STDLIB = /^(console|Math|JSON|Object|Array|Promise|String|Number|Date|Map|
 export interface ContextSources {
   explainer: Explainer;
   tests: TestIndex;
-  /** Display name of the configured provider for `main` or `expand`. */
-  providerName(role: 'main' | 'expand'): string;
 }
 
 /** Errors a statement can raise: its own `throw` plus the throw sites of its project callees. No LLM. */
