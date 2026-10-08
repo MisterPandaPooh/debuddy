@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ExplainSession } from './adapter';
 import { PromptExplainer } from './explain';
-import { ChatProvider, ClaudeCliProvider, OllamaProvider, OpenAICompatibleProvider, ProviderKind, VscodeLmProvider } from './providers';
+import { ChatProvider, ClaudeCliProvider, ClaudeSessionProvider, CursorCliProvider, OllamaProvider, OpenAICompatibleProvider, ProviderKind, VscodeLmProvider } from './providers';
 import { SettingsUi } from './settingsUi';
 import { TestIndex } from './tests';
 import { ExplainUi } from './ui';
@@ -9,7 +9,14 @@ import { ExplainUi } from './ui';
 export function activate(context: vscode.ExtensionContext) {
   const ui = new ExplainUi();
   const registry = new ProviderRegistry(context.secrets);
-  const src = { explainer: new PromptExplainer(() => registry.current()), tests: new TestIndex() };
+  context.subscriptions.push(registry);
+  const src = {
+    explainer: new PromptExplainer(
+      () => registry.current(),
+      () => vscode.workspace.getConfiguration('explain').get<boolean>('exampleValues', true),
+    ),
+    tests: new TestIndex(),
+  };
 
   // Own context key for menus/keybindings: set while an Explain session is the active one.
   const setActive = (on: boolean) => vscode.commands.executeCommand('setContext', 'explain.active', on);
@@ -95,8 +102,10 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 /** Builds providers from `explain.*` settings on demand, so a settings change applies to the next call. */
-class ProviderRegistry {
+class ProviderRegistry implements vscode.Disposable {
   private apiKey?: string;
+  /** The persistent Claude session is kept across calls, keyed by its settings. */
+  private session?: { key: string; provider: ClaudeSessionProvider };
 
   constructor(private secrets: vscode.SecretStorage) {
     void secrets.get('explain.openai.apiKey').then((k) => (this.apiKey = k));
@@ -119,11 +128,25 @@ class ProviderRegistry {
         });
       case 'vscode-lm':
         return new VscodeLmProvider({ vendor: c.get<string>('vscodeLm.vendor') || undefined, family: c.get<string>('vscodeLm.family') || undefined });
-      case 'claude-cli':
-        return new ClaudeCliProvider({ model: c.get<string>('claude.model') || undefined, bin: c.get<string>('claude.bin') || undefined });
+      case 'claude-cli': {
+        const opts = { model: c.get<string>('claude.model') || undefined, bin: c.get<string>('claude.bin') || undefined };
+        if (!c.get<boolean>('claude.persistentSession', true)) return new ClaudeCliProvider(opts);
+        const key = JSON.stringify(opts);
+        if (this.session?.key !== key) {
+          this.session?.provider.dispose();
+          this.session = { key, provider: new ClaudeSessionProvider(opts) };
+        }
+        return this.session.provider;
+      }
+      case 'cursor-cli':
+        return new CursorCliProvider({ model: c.get<string>('cursor.model') || undefined, bin: c.get<string>('cursor.bin') || undefined });
       default:
         return new OllamaProvider({ url: c.get<string>('ollamaUrl', 'http://localhost:11434'), model: c.get<string>('model', 'qwen2.5-coder:3b') });
     }
+  }
+
+  dispose() {
+    this.session?.provider.dispose();
   }
 }
 

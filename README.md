@@ -22,10 +22,12 @@ Settings live under `explain.*` (provider, context window, definition depth, aut
 | `ollama` (default) | Ollama + `qwen2.5-coder:3b` | ~0.4 s | local, free; the prompts are tuned for it |
 | `openai` | `explain.openai.baseUrl` + `Explain Mode: Set API key` | 1–3 s | OpenRouter, OpenAI, LM Studio, vLLM, Ollama's `/v1`; the key lives in VS Code secret storage |
 | `vscode-lm` | GitHub Copilot (or any Language Model Chat Provider extension) | 1–3 s | one consent prompt; **not available in Cursor** |
-| `claude-cli` | Claude Code CLI signed in (subscription or API key) | ~10 s | process start dominates; the next-step prefetch hides part of it |
+| `claude-cli` | Claude Code CLI signed in (subscription or API key) | ~4 s | one persistent `stream-json` session (`explain.claude.persistentSession`); the CLI is an agent harness, so it never gets as fast as a chat API |
+| `cursor-cli` | Cursor Agent CLI, `agent login` once | ? | reuses the Cursor subscription; no system-prompt flag, instructions are folded into the prompt |
 
-Cursor runs the extension unchanged; use `ollama`, `openai` or `claude-cli` there, since Cursor
-does not expose its own models to extensions.
+Cursor runs the extension unchanged. Cursor does not expose its models to extensions, but its
+Agent CLI does: `cursor-cli` is the way to use the Cursor subscription. On slow providers set
+`explain.exampleValues: false` to save one call per statement.
 
 ## Develop
 

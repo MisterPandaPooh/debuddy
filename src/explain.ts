@@ -82,7 +82,7 @@ export class PromptExplainer implements Explainer {
   private summaries = new Map<string, Promise<string>>();
 
   /** The provider is resolved per call, so a settings change applies to the next step. */
-  constructor(private provider: () => ChatProvider) {}
+  constructor(private provider: () => ChatProvider, private wantValues: () => boolean = () => true) {}
 
   async explainStatement(ctx: StatementContext): Promise<Explanation> {
     const text = await this.chat(EXPLAIN_SYSTEM, contextPrompt(ctx), 100);
@@ -90,7 +90,7 @@ export class PromptExplainer implements Explainer {
   }
 
   async exampleValues(ctx: StatementContext): Promise<ExampleValue[]> {
-    if (ctx.vars.length === 0) return [];
+    if (ctx.vars.length === 0 || !this.wantValues()) return [];
     const hints = ctx.callees.length ? `\n${ctx.callees.join('\n')}` : '';
     const text = await this.chat(VALUES_SYSTEM, `Statement: ${ctx.statement}\nVariables: ${ctx.vars.join('\n')}${hints}`, 80);
     return parseValues(text, ctx.vars.map((v) => v.split(':')[0].trim()));

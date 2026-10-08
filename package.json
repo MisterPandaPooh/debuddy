@@ -154,14 +154,16 @@
             "ollama",
             "openai",
             "vscode-lm",
-            "claude-cli"
+            "claude-cli",
+            "cursor-cli"
           ],
           "default": "ollama",
           "enumDescriptions": [
             "Ollama, local (explain.ollamaUrl / explain.model)",
             "Any OpenAI-compatible API: OpenRouter, OpenAI, LM Studio, vLLM (explain.openai.*; key via 'Explain Mode: Set API key')",
             "Models registered in VS Code, e.g. GitHub Copilot (explain.vscodeLm.*). Not available in Cursor.",
-            "Claude Code CLI in headless mode, reusing your Claude login (explain.claude.*). ~10 s per step (process start)."
+            "Claude Code CLI, reusing your Claude login (subscription or key). A persistent session keeps it at ~4 s per call (explain.claude.*).",
+            "Cursor Agent CLI (`agent -p`), reusing your Cursor subscription; run `agent login` once (explain.cursor.*)."
           ],
           "description": "Model used for every step."
         },
@@ -237,6 +239,26 @@
           "type": "string",
           "default": "",
           "description": "Path to the claude executable if not on PATH."
+        },
+        "explain.claude.persistentSession": {
+          "type": "boolean",
+          "default": true,
+          "description": "Keep one claude process alive and send each call as a turn (~4 s) instead of starting a process per call (~10 s). Recycled every 30 turns."
+        },
+        "explain.cursor.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model for the Cursor Agent CLI (--model). Empty = account default."
+        },
+        "explain.cursor.bin": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Cursor `agent` executable if not on PATH."
+        },
+        "explain.exampleValues": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ask the model for example values of declared variables (one extra call per statement). Turn off on slow providers."
         }
       }
     },

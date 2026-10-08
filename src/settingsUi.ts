@@ -3,7 +3,8 @@ import { ProviderKind } from './providers';
 
 const KINDS: { provider: ProviderKind; label: string; detail: string }[] = [
   { provider: 'ollama', label: 'Ollama (local)', detail: 'free, ~0.4 s per step with qwen2.5-coder:3b' },
-  { provider: 'claude-cli', label: 'Claude Code CLI', detail: 'your Claude login, ~10 s per step' },
+  { provider: 'claude-cli', label: 'Claude Code CLI', detail: 'your Claude login (subscription), ~4 s per call with the persistent session' },
+  { provider: 'cursor-cli', label: 'Cursor Agent CLI', detail: 'your Cursor subscription; run `agent login` once' },
   { provider: 'vscode-lm', label: 'VS Code models (Copilot)', detail: 'needs Copilot; not available in Cursor' },
   { provider: 'openai', label: 'OpenAI-compatible API', detail: 'OpenRouter, OpenAI, LM Studio, vLLM — needs a key' },
 ];
@@ -30,6 +31,7 @@ export class SettingsUi implements vscode.Disposable {
     const model =
       kind === 'ollama' ? c.get<string>('model')
       : kind === 'claude-cli' ? c.get<string>('claude.model') || 'default'
+      : kind === 'cursor-cli' ? c.get<string>('cursor.model') || 'default'
       : kind === 'vscode-lm' ? c.get<string>('vscodeLm.family') || 'first available'
       : c.get<string>('openai.model');
     this.item.text = `$(comment-discussion) Explain: ${kind} · ${model}`;
@@ -71,6 +73,11 @@ export class SettingsUi implements vscode.Disposable {
       case 'claude-cli': {
         const pick = await vscode.window.showQuickPick(['default', 'haiku', 'sonnet', 'opus'], { placeHolder: 'Claude model (--model)' });
         if (pick !== undefined) await set('claude.model', pick === 'default' ? '' : pick);
+        return;
+      }
+      case 'cursor-cli': {
+        const model = await vscode.window.showInputBox({ prompt: 'Cursor model (--model), e.g. sonnet-4.5, gpt-5; empty = default', value: c.get('cursor.model') });
+        if (model !== undefined) await set('cursor.model', model);
         return;
       }
       case 'vscode-lm': {
