@@ -20,7 +20,7 @@
 </table>
 
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=MisterPandaPooh.debuddy"><img alt="VS Code Marketplace" src="https://img.shields.io/visual-studio-marketplace/v/MisterPandaPooh.debuddy?label=VS%20Code%20Marketplace&color=0078d4"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=MisterPandaPooh.debuddy"><img alt="VS Code Marketplace" src="https://vsmarketplacebadges.dev/version-short/MisterPandaPooh.debuddy.svg?label=VS%20Code%20Marketplace&color=0078d4"></a>
   <a href="https://open-vsx.org/extension/MisterPandaPooh/debuddy"><img alt="Open VSX (Cursor)" src="https://img.shields.io/open-vsx/v/MisterPandaPooh/debuddy?label=Open%20VSX%20%28Cursor%29&color=7c3aed"></a>
   <a href="https://github.com/MisterPandaPooh/debuddy/releases"><img alt="Download" src="https://img.shields.io/badge/download-VSIX-2ea44f"></a>
   <a href="https://github.com/MisterPandaPooh/debuddy/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MisterPandaPooh/debuddy/actions/workflows/ci.yml/badge.svg"></a>
