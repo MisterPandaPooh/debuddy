@@ -7,6 +7,8 @@ const { ExplainSession } = require('./adapter.bundle.js');
 const explainer = {
   explainStatement: async (ctx) => ({ does: `[stub] ${ctx.statement.slice(0, 30)}`, why: '', watch: '' }),
   summarizeFunction: async () => '[stub summary]',
+  exampleValues: async (ctx) => ctx.vars.map((v) => ({ name: v.split(':')[0], example: '{ …example }', alternative: 'null' })),
+  answer: async (ctx, q) => `[stub answer to "${q}" about: ${ctx.statement.slice(0, 20)}]`,
 };
 const ui = {
   log: (m) => console.log('   log:', m),
@@ -35,4 +37,15 @@ const tick = () => new Promise((r) => setTimeout(r, 50));
   send('continue', { threadId: 1 });
   await tick();
   send('stackTrace', { threadId: 1 });
+  send('scopes', { frameId: 0 });
+  send('variables', { variablesReference: 2 });
+  send('evaluate', { expression: 'active', context: 'hover' });
+  send('evaluate', { expression: 'why filter here?', context: 'repl' });
+  await tick();
+  send('stepBack', { threadId: 1 });
+  await tick();
+  send('stepBack', { threadId: 1 });
+  await tick();
+  send('reverseContinue', { threadId: 1 });
+  await tick();
 })();

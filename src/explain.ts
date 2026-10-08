@@ -6,23 +6,34 @@ export interface Explanation {
   watch: string;
 }
 
+/** A plausible value for a variable, plus the alternative outcome when there is one. */
+export interface ExampleValue {
+  name: string;
+  example: string;
+  alternative?: string;
+}
+
 /** What the context builder hands to the model for one statement. */
 export interface StatementContext {
   enclosing: string;
   statement: string;
-  /** Resolved project callees, each as "name(sig): summary" or a code excerpt. */
+  /** Resolved project callees, each as "name: summary". */
   callees: string[];
   hovers: string[];
+  /** Variables declared by the statement, each as "name: type". */
+  vars: string[];
   reason: string;
 }
 
 export interface Explainer {
   explainStatement(ctx: StatementContext): Promise<Explanation>;
+  exampleValues(ctx: StatementContext): Promise<ExampleValue[]>;
   summarizeFunction(source: string, reason: string): Promise<string>;
+  answer(ctx: StatementContext, question: string): Promise<string>;
 }
 
-// Prompt validated in bench/bench.mjs against qwen2.5-coder:3b.
-const SYSTEM = `You explain one statement of source code to a developer stepping through it like a debugger.
+// Prompts validated in bench/bench.mjs and bench/values.mjs against qwen2.5-coder:3b.
+const EXPLAIN_SYSTEM = `You explain one statement of source code to a developer stepping through it like a debugger.
 Rules:
 - Use ONLY the context given. Never guess what an unknown function does.
 - If a "Resolved definition" or "Hover info" is given, "Does" MUST say what the called function actually does according to it, not just "calls X".
@@ -43,6 +54,24 @@ Does: Reads the file at path and parses it as JSON, or returns DEFAULTS when emp
 Why: Loads the settings the rest of the function relies on.
 Watch: Falls back to DEFAULTS silently; JSON.parse can throw on bad input.`;
 
+const VALUES_SYSTEM = `You invent ONE plausible example value for each variable a statement assigns, for a developer reading code.
+Rules:
+- The example uses ONLY the fields listed in the type, and is never empty when the type allows content.
+- Keep it tiny: one line, at most 60 chars.
+- If the type allows null/undefined or the code has a fallback, add that alternative after " | ". Otherwise omit " | ".
+- One line per variable, ALL of them, exactly "name = example | alternative". No prose.
+
+Example:
+Statement: const { cfg, warn } = await loadConfig(path);
+Variables: cfg: Config { port: number; host: string }
+warn: string | undefined
+Answer:
+cfg = { port: 8080, host: "localhost" }
+warn = "deprecated key: ssl" | undefined`;
+
+const ANSWER_SYSTEM = `You answer a developer's question about the statement they are currently stopped on while reading code.
+Use ONLY the context given; say so if it is not enough. Answer in at most 4 short lines, no code fences.`;
+
 export class OllamaExplainer implements Explainer {
   private summaries = new Map<string, Promise<string>>();
 
@@ -52,12 +81,15 @@ export class OllamaExplainer implements Explainer {
   }
 
   async explainStatement(ctx: StatementContext): Promise<Explanation> {
-    const parts = [`Enclosing function:\n${ctx.enclosing}`, `Current statement:\n${ctx.statement}`];
-    if (ctx.callees.length) parts.push(`Known functions:\n${ctx.callees.join('\n')}`);
-    if (ctx.hovers.length) parts.push(`Hover info:\n${ctx.hovers.join('\n')}`);
-    if (ctx.reason) parts.push(`Context: ${ctx.reason}`);
-    const text = await this.chat(SYSTEM, parts.join('\n\n'), 100);
+    const text = await this.chat(EXPLAIN_SYSTEM, contextPrompt(ctx), 100);
     return parseExplanation(text);
+  }
+
+  async exampleValues(ctx: StatementContext): Promise<ExampleValue[]> {
+    if (ctx.vars.length === 0) return [];
+    const hints = ctx.callees.length ? `\n${ctx.callees.join('\n')}` : '';
+    const text = await this.chat(VALUES_SYSTEM, `Statement: ${ctx.statement}\nVariables: ${ctx.vars.join('\n')}${hints}`, 80);
+    return parseValues(text, ctx.vars.map((v) => v.split(':')[0].trim()));
   }
 
   summarizeFunction(source: string, reason: string): Promise<string> {
@@ -72,6 +104,11 @@ ${source}`;
       this.summaries.set(key, p);
     }
     return p;
+  }
+
+  async answer(ctx: StatementContext, question: string): Promise<string> {
+    const text = await this.chat(ANSWER_SYSTEM, `${contextPrompt(ctx)}\n\nQuestion: ${question}`, 160);
+    return text.trim();
   }
 
   private async chat(system: string, user: string, maxTokens: number): Promise<string> {
@@ -94,11 +131,30 @@ ${source}`;
   }
 }
 
+function contextPrompt(ctx: StatementContext): string {
+  const parts = [`Enclosing function:\n${ctx.enclosing}`, `Current statement:\n${ctx.statement}`];
+  if (ctx.callees.length) parts.push(`Known functions:\n${ctx.callees.join('\n')}`);
+  if (ctx.hovers.length) parts.push(`Hover info:\n${ctx.hovers.join('\n')}`);
+  if (ctx.reason) parts.push(`Context: ${ctx.reason}`);
+  return parts.join('\n\n');
+}
+
 export function parseExplanation(text: string): Explanation {
   const pick = (label: string) => text.match(new RegExp(`^${label}:\\s*(.+)$`, 'mi'))?.[1].trim() ?? '';
   const out = { does: pick('Does'), why: pick('Why'), watch: pick('Watch') };
   // Model drifted from the format: show the raw text rather than nothing.
   if (!out.does) out.does = text.trim();
   if (out.watch === '-') out.watch = '';
+  return out;
+}
+
+export function parseValues(text: string, names: string[]): ExampleValue[] {
+  const out: ExampleValue[] = [];
+  for (const line of text.split('\n')) {
+    const m = line.match(/^\s*([\w$]+)\s*=\s*(.+)$/);
+    if (!m || !names.includes(m[1])) continue;
+    const [example, ...alt] = m[2].split(' | ');
+    out.push({ name: m[1], example: example.trim(), alternative: alt.join(' | ').trim() || undefined });
+  }
   return out;
 }

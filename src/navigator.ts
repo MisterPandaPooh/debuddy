@@ -8,6 +8,8 @@ export interface Step {
   text: string;
   /** Project calls made by this statement, with the callee identifier position. */
   calls: { name: string; position: vscode.Position }[];
+  /** Variables this statement declares (incl. destructuring), for example values. */
+  declared: { name: string; position: vscode.Position }[];
 }
 
 /** A function the user is stepping through. */
@@ -74,6 +76,7 @@ function collectSteps(sf: ts.SourceFile, body: ts.Node, doc: vscode.TextDocument
         endLine: end.line + 1,
         text: head.getText(),
         calls: collectCalls(head, doc),
+        declared: collectDeclared(n, doc),
       });
       if (head === n) return;
     }
@@ -107,6 +110,18 @@ function collectCalls(n: ts.Node, doc: vscode.TextDocument) {
   };
   visit(n);
   return calls;
+}
+
+/** Names bound by `const/let/var` in this statement, including destructuring patterns. */
+function collectDeclared(s: ts.Statement, doc: vscode.TextDocument): Step['declared'] {
+  const out: Step['declared'] = [];
+  if (!ts.isVariableStatement(s)) return out;
+  const visitName = (name: ts.BindingName) => {
+    if (ts.isIdentifier(name)) out.push({ name: name.text, position: doc.positionAt(name.getStart()) });
+    else for (const el of name.elements) if (ts.isBindingElement(el)) visitName(el.name);
+  };
+  for (const d of s.declarationList.declarations) visitName(d.name);
+  return out;
 }
 
 /** Build the frame for the function containing `line` (1-based); `undefined` if none. */

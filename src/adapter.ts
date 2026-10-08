@@ -13,11 +13,12 @@ import {
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { buildContext } from './context';
-import { Explainer, Explanation } from './explain';
+import { ExampleValue, Explainer, Explanation, StatementContext } from './explain';
 import { Frame, frameAt, resolveProjectCallee } from './navigator';
 import { ExplainUi } from './ui';
 
 const THREAD_ID = 1;
+const BANNER = '⚠️ _Static walkthrough: nothing is executed. Values are illustrative, branches are read in source order._';
 
 interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
   file: string;
@@ -32,6 +33,11 @@ export class ExplainSession extends DebugSession {
   private stack: Frame[] = [];
   private breakpoints = new Map<string, Set<number>>();
   private explanation?: Explanation;
+  private values: ExampleValue[] = [];
+  private context?: StatementContext;
+  /** Snapshots of (frame, index) per stop, for Step Back / Reverse Continue. */
+  private history: { stack: Frame[]; indices: number[]; reason: string }[] = [];
+  private firstStop = true;
   private explainToken = 0;
 
   constructor(private ui: ExplainUi, private explainer: Explainer) {
@@ -50,7 +56,12 @@ export class ExplainSession extends DebugSession {
   }
 
   protected initializeRequest(response: DebugProtocol.InitializeResponse): void {
-    response.body = { supportsConfigurationDoneRequest: true };
+    response.body = {
+      supportsConfigurationDoneRequest: true,
+      supportsStepBack: true,
+      supportsEvaluateForHovers: true,
+      supportsFunctionBreakpoints: true,
+    };
     this.sendResponse(response);
     this.sendEvent(new InitializedEvent());
   }
@@ -68,7 +79,7 @@ export class ExplainSession extends DebugSession {
   }
 
   protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
-    response.body = { threads: [new Thread(THREAD_ID, 'Explain')] };
+    response.body = { threads: [new Thread(THREAD_ID, 'Explain (static walkthrough)')] };
     this.sendResponse(response);
   }
 
@@ -83,19 +94,86 @@ export class ExplainSession extends DebugSession {
   }
 
   protected scopesRequest(response: DebugProtocol.ScopesResponse): void {
-    response.body = { scopes: [new Scope('Explanation', 1, false)] };
+    response.body = {
+      scopes: [new Scope('Explanation', 1, false), new Scope('Example values (not runtime)', 2, false)],
+    };
     this.sendResponse(response);
   }
 
-  protected variablesRequest(response: DebugProtocol.VariablesResponse): void {
-    const e = this.explanation;
+  protected variablesRequest(
+    response: DebugProtocol.VariablesResponse,
+    args: DebugProtocol.VariablesArguments,
+  ): void {
     const v = (name: string, value: string) => ({ name, value, variablesReference: 0 });
-    response.body = {
-      variables: e
-        ? [v('Does', e.does), v('Why', e.why), v('Watch', e.watch || '-')]
-        : [v('Status', 'explaining…')],
-    };
+    if (args.variablesReference === 2) {
+      const step = this.top?.steps[this.top.index];
+      response.body = {
+        variables: this.values.length
+          ? this.values.map((x) => v(x.name, x.alternative ? `${x.example}   | ${x.alternative}` : x.example))
+          : [v(step?.declared.length ? 'Status' : '(none)', step?.declared.length ? 'thinking…' : 'statement declares nothing')],
+      };
+    } else {
+      const e = this.explanation;
+      response.body = {
+        variables: e ? [v('Does', e.does), v('Why', e.why), v('Watch', e.watch || '-')] : [v('Status', 'explaining…')],
+      };
+    }
     this.sendResponse(response);
+  }
+
+  /** Function breakpoints: stop when entering a function with one of these names. */
+  private functionBreakpoints = new Set<string>();
+
+  protected setFunctionBreakPointsRequest(
+    response: DebugProtocol.SetFunctionBreakpointsResponse,
+    args: DebugProtocol.SetFunctionBreakpointsArguments,
+  ): void {
+    this.functionBreakpoints = new Set(args.breakpoints.map((b) => b.name.replace(/\(\)$/, '')));
+    response.body = { breakpoints: args.breakpoints.map(() => ({ verified: true })) };
+    this.sendResponse(response);
+  }
+
+  /** Hover on an identifier shows its example value; the Debug Console asks the model. */
+  protected async evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments) {
+    const expr = args.expression.trim();
+    try {
+      if (args.context === 'repl' && this.context) {
+        const text = await this.explainer.answer(this.context, expr);
+        response.body = { result: text, variablesReference: 0 };
+      } else {
+        const known = this.values.find((x) => x.name === expr);
+        const type = this.context?.vars.find((x) => x.startsWith(`${expr}:`));
+        if (!known && !type) return this.sendErrorResponse(response, 2, 'no example value for this expression');
+        const parts = [type ?? expr, known ? `example: ${known.example}` : '', known?.alternative ? `or: ${known.alternative}` : ''];
+        response.body = { result: parts.filter(Boolean).join('\n'), variablesReference: 0 };
+      }
+      this.sendResponse(response);
+    } catch (err) {
+      this.sendErrorResponse(response, 3, err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  protected stepBackRequest(response: DebugProtocol.StepBackResponse): void {
+    this.sendResponse(response);
+    this.history.pop(); // current position
+    const prev = this.history.pop();
+    if (!prev) return void this.stopAt('step');
+    this.restore(prev);
+    void this.stopAt('step');
+  }
+
+  protected reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse): void {
+    this.sendResponse(response);
+    this.history.pop();
+    let prev = this.history.pop();
+    while (prev && this.history.length && !['breakpoint', 'entry'].includes(prev.reason)) prev = this.history.pop();
+    if (prev) this.restore(prev);
+    void this.stopAt(prev?.reason === 'breakpoint' ? 'breakpoint' : 'step');
+  }
+
+  private restore(snap: { stack: Frame[]; indices: number[] }) {
+    this.stack = [...snap.stack];
+    snap.stack.forEach((f, i) => (f.index = snap.indices[i]));
   }
 
   protected setBreakPointsRequest(
@@ -126,7 +204,7 @@ export class ExplainSession extends DebugSession {
       const frame = frameAt(doc, loc.range.start.line + 1, reason);
       if (!frame) continue;
       this.stack.push(frame);
-      void this.stopAt('step', true);
+      void this.stopAt(this.functionBreakpoints.has(frame.name) ? 'function breakpoint' : 'step', true);
       return;
     }
     // Nothing to enter: behave like Step Over.
@@ -147,6 +225,7 @@ export class ExplainSession extends DebugSession {
     // breakpoint in another function is reachable from the entry point.
     for (let guard = 0; guard < 5000; guard++) {
       if (await this.enterCalleeWithBreakpoint()) {
+        if (this.functionBreakpoints.has(this.top.name)) return void this.stopAt('function breakpoint', true);
         if (this.atBreakpoint()) return void this.stopAt('breakpoint', true);
         continue;
       }
@@ -171,12 +250,12 @@ export class ExplainSession extends DebugSession {
       const loc = await resolveProjectCallee(caller.uri, call);
       if (!loc) continue;
       const bps = this.breakpoints.get(loc.uri.fsPath);
-      if (!bps?.size) continue;
       const doc = await vscode.workspace.openTextDocument(loc.uri);
       const frame = frameAt(doc, loc.range.start.line + 1, `stepped into from ${caller.name}(), which runs: ${step.text}`);
       if (!frame) continue;
       const last = frame.steps[frame.steps.length - 1];
-      if (![...bps].some((l) => l >= frame.startLine && l <= last.endLine)) continue;
+      const hasLine = [...(bps ?? [])].some((l) => l >= frame.startLine && l <= last.endLine);
+      if (!hasLine && !this.functionBreakpoints.has(frame.name)) continue;
       // Never re-enter a frame already on the stack (recursion).
       if (this.stack.some((f) => f.uri.fsPath === frame.uri.fsPath && f.startLine === frame.startLine)) continue;
       this.stack.push(frame);
@@ -231,14 +310,29 @@ export class ExplainSession extends DebugSession {
     const step = frame.steps[frame.index];
     const token = ++this.explainToken;
     this.explanation = undefined;
+    this.values = [];
+    this.context = undefined;
+    this.history.push({ stack: [...this.stack], indices: this.stack.map((f) => f.index), reason });
     this.log(`stop(${reason}) ${frame.name}() L${step.line}: ${step.text.split('\n')[0]}`);
     this.sendEvent(new StoppedEvent(reason, THREAD_ID));
 
     try {
-      const header = entered ? await this.frameHeader(frame) : undefined;
+      let header = entered ? await this.frameHeader(frame) : undefined;
+      if (this.firstStop) {
+        header = [BANNER, header].filter(Boolean).join('\n\n');
+        this.firstStop = false;
+      }
       if (token !== this.explainToken) return;
       this.ui.showPending(frame.uri, step.line, header);
       const ctx = await buildContext(frame, step, this.explainer);
+      if (token !== this.explainToken) return;
+      this.context = ctx;
+      // Values are a second local call; let them land after the explanation without blocking it.
+      void this.explainer.exampleValues(ctx).then((values) => {
+        if (token !== this.explainToken) return;
+        this.values = values;
+        this.sendEvent(new InvalidatedEvent(['variables'], THREAD_ID));
+      }).catch((err) => this.log(`values: ${err}`));
       const explanation = await this.explainer.explainStatement(ctx);
       if (token !== this.explainToken) return;
       this.explanation = explanation;

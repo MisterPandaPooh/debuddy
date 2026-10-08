@@ -32,11 +32,19 @@ export async function buildContext(frame: Frame, step: Step, explainer: Explaine
     }
   }
 
+  // Types of the variables this statement declares drive the example values.
+  const vars: string[] = [];
+  for (const d of step.declared) {
+    const h = await hoverText(frame.uri, d.position);
+    vars.push(`${d.name}: ${h?.replace(/^\(?(const|let|var)\)?\s*[\w$]+:\s*/, '') ?? 'unknown'}`);
+  }
+
   return {
     enclosing: trimAround(frame, step),
     statement: step.text,
     callees,
     hovers,
+    vars,
     reason: frame.reason,
   };
 }
