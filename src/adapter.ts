@@ -146,10 +146,28 @@ export class ExplainSession extends DebugSession {
     this.sendResponse(response);
     // A previous session may have ended mid-walk: the toolbar buttons must not stay hidden.
     void vscode.commands.executeCommand('setContext', 'explain.autoWalking', false);
-    // Warm the provider in parallel with the first explanation; the status bar says why it may take a moment.
+    void this.startEntry().catch((err) => this.recover(err));
+  }
+
+  /**
+   * Entry stop: the provider gets ready (it has answered once) and the first statement is
+   * explained before VS Code is told we stopped — a loader under the line says what is going on.
+   */
+  private async startEntry() {
+    const token = this.explainToken; // disconnect bumps it: nothing is shown after that
+    const frame = this.top;
+    const step = frame.steps[frame.index];
+    const name = this.src.providerName?.() ?? 'the model';
+    await this.ui.highlight(frame.uri, step.line);
+    this.ui.showLoading(frame.uri, step.line, `Getting ${name} ready…`);
     const warm = this.src.explainer.warmUp().catch((err) => this.log(`warm-up: ${errMsg(err)}`));
-    vscode.window.setStatusBarMessage('$(sync~spin) DeBuddy: loading model…', warm);
-    void this.stopAt('entry', true);
+    vscode.window.setStatusBarMessage(`$(sync~spin) DeBuddy: getting ${name} ready…`, warm);
+    await warm;
+    if (token !== this.explainToken) return;
+    this.ui.setLoader('Explaining the first statement…');
+    await this.prepare(frame, step).catch(() => undefined); // a failure is reported by present()
+    if (token !== this.explainToken) return;
+    await this.stopAt('entry', true);
   }
 
   protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
@@ -887,10 +905,16 @@ export class ExplainSession extends DebugSession {
       { location: vscode.ProgressLocation.Notification, title: 'DeBuddy: preparing the walk', cancellable: true },
       async (progress, token) => {
         let done = 0;
-        progress.report({ message: `0 / ${tasks.length}` });
-        const all = Promise.all(tasks.map((t) => this.throttled(t).then(() => progress.report({ message: `${++done} / ${tasks.length}`, increment: 100 / tasks.length }))));
+        // The same count under the current line, where the eyes are.
+        const report = () => {
+          progress.report({ message: `${done} / ${tasks.length}`, increment: done ? 100 / tasks.length : 0 });
+          this.ui.setLoader(`Preparing the walk… ${done} / ${tasks.length} (${Math.round((done / tasks.length) * 100)} %)`);
+        };
+        report();
+        const all = Promise.all(tasks.map((t) => this.throttled(t).then(() => (done++, report()))));
         // Cancel (the notification) starts walking now; Pause (the toolbar) ends the auto-walk through run.wake.
         await Promise.race([all, new Promise<void>((r) => token.onCancellationRequested(() => r())), new Promise<void>((r) => (run.wake = r))]);
+        this.ui.setLoader(undefined);
       },
     );
   }

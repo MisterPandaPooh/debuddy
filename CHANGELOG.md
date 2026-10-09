@@ -7,7 +7,11 @@
   `explain.prefetch.depth` levels down (2), prepared in the background with
   `explain.prefetch.parallel` calls in flight (2). The statement on screen never waits behind it,
   and every stop extends the window (infinite scroll). Replaces `explain.prefetch`.
-- Auto-walk prepares that window first, with a progress notification (Cancel starts walking now).
+- Auto-walk prepares that window first, with a progress notification and the same count with a
+  percentage under the current line (Cancel starts walking now).
+- Session start: a loader under the line ("Getting the local model ready…", "Explaining the
+  first statement…"); VS Code is told we stopped only once the provider has answered and the
+  first statement is explained. The Claude session pool warms up by running one turn per session.
 - First-run dialog: "Set up another provider…" opens the provider picker. Picking Embedded there
   asks for the download again even if the first dialog was dismissed. A session that was waiting
   for the download, or whose provider/model changed from the status bar, restarts from scratch.

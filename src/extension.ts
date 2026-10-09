@@ -8,6 +8,17 @@ import { SettingsUi } from './settingsUi';
 import { TestIndex } from './tests';
 import { ExplainUi } from './ui';
 
+/** What the loader calls each provider (by the first segment of its name). */
+const PROVIDER_LABEL: Record<string, string> = {
+  embedded: 'the local model',
+  ollama: 'Ollama',
+  'claude-session': 'Claude Code',
+  'claude-cli': 'Claude Code',
+  'cursor-cli': 'Cursor',
+  openai: 'the API',
+  'vscode-lm': 'Copilot',
+};
+
 export function activate(context: vscode.ExtensionContext) {
   initLanguages(context.extensionPath);
   const ui = new ExplainUi();
@@ -21,6 +32,10 @@ export function activate(context: vscode.ExtensionContext) {
     ),
     tests: new TestIndex(),
     slow: () => registry.current().slow === true,
+    providerName: () => {
+      const kind = registry.current().name.split('/')[0];
+      return PROVIDER_LABEL[kind] ?? kind;
+    },
   };
 
   // Own context key for menus/keybindings: set while an Explain session is the active one.

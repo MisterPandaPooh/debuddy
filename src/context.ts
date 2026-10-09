@@ -11,6 +11,8 @@ export interface ContextSources {
   tests: TestIndex;
   /** Seconds-per-call provider: spend tokens, not round-trips (raw callee code instead of summaries). */
   slow?: () => boolean;
+  /** Short label of the current provider, for loaders ("Getting Claude Code ready…"). */
+  providerName?: () => string;
 }
 
 /** Errors a statement can raise: its own `throw` plus the throw sites of its project callees. No LLM. */

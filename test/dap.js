@@ -17,7 +17,7 @@ const explainer = {
 };
 const ui = {
   log: (m) => console.log('   log:', m),
-  showPending: () => {}, show: (u, l, e, o) => console.log(`   ui.show L${l}`, e.does, o?.footer ?? ''), showError: (u, l, e) => console.log('   ui.error', e), clear: () => {},
+  showPending: () => {}, showLoading: (u, l, t) => console.log(`   ui.loading L${l} ${t}`), setLoader: (t) => t && console.log(`   ui.loader ${t}`), show: (u, l, e, o) => console.log(`   ui.show L${l}`, e.does, o?.footer ?? ''), showError: (u, l, e) => console.log('   ui.error', e), clear: () => {},
   highlight: async (u, l) => console.log(`   ui.highlight L${l}`), clearHighlight: () => {}, setAutoStatus: () => {}, pickBranch: async () => undefined, patchHeader: () => {}, hover: { set() {}, clear() {} },
 };
 

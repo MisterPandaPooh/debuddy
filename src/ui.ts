@@ -72,6 +72,25 @@ export class ExplainUi implements vscode.Disposable {
     this.render(uri, line, `${header ? header + '\n\n' : ''}_Explaining…_`);
   }
 
+  /** The loader text appended to the current card, so it can be replaced without redrawing the card. */
+  private loader?: string;
+
+  /** A card under `line` holding only a loader (before the first explanation exists). */
+  showLoading(uri: vscode.Uri, line: number, text: string, header?: string) {
+    this.render(uri, line, header ?? '');
+    this.setLoader(text);
+  }
+
+  /** Append or update a `⏳ …` line at the bottom of the current card; `undefined` removes it. */
+  setLoader(text: string | undefined) {
+    const c = this.thread?.comments[0];
+    if (!this.thread || !c) return;
+    let body = typeof c.body === 'string' ? c.body : c.body.value;
+    if (this.loader) body = body.replace(this.loader, '');
+    this.loader = text ? `${body ? '\n\n' : ''}⏳ _${text}_` : undefined;
+    this.thread.comments = [{ ...c, body: new vscode.MarkdownString(body + (this.loader ?? '')) }];
+  }
+
   show(uri: vscode.Uri, line: number, e: Explanation, opts: ShowOptions = {}) {
     const md = [
       opts.header,
@@ -131,6 +150,7 @@ export class ExplainUi implements vscode.Disposable {
 
   private render(uri: vscode.Uri, line: number, markdown: string) {
     this.thread?.dispose();
+    this.loader = undefined;
     const range = new vscode.Range(line - 1, 0, line - 1, 0);
     this.thread = this.controller.createCommentThread(uri, range, [
       {

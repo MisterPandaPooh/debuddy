@@ -160,9 +160,12 @@ export class ClaudeSessionProvider implements ChatProvider {
     this.queues = this.sessions.map(() => Promise.resolve());
   }
 
-  /** Spawn the first session now: its ~10 s bootstrap then overlaps with the walker and the first read. */
+  /**
+   * Ready means answered: every session runs a one-word turn now, in parallel, so the ~3 s
+   * bootstrap of each process is paid before the first statement, not on it.
+   */
   async warmUp(): Promise<void> {
-    this.sessions[0].ensureSpawned();
+    await Promise.all(this.sessions.map((_, i) => this.enqueue(i, 'Reply with the single word: ok').catch(() => undefined)));
   }
 
   chat(system: string, user: string): Promise<string> {
@@ -170,6 +173,11 @@ export class ClaudeSessionProvider implements ChatProvider {
     const content = `Instructions for this task:\n${system}\n\n---\n\n${user}`;
     let i = 0;
     for (let k = 1; k < this.sessions.length; k++) if (this.sessions[k].busy < this.sessions[i].busy) i = k;
+    return this.enqueue(i, content);
+  }
+
+  /** One turn on session `i`, after the turns already queued there. */
+  private enqueue(i: number, content: string): Promise<string> {
     this.sessions[i].busy++; // reserve before the queue drains so the next caller sees it
     const next = this.queues[i].then(() => this.sessions[i].turn(content)).finally(() => this.sessions[i].busy--);
     this.queues[i] = next.catch(() => undefined);
