@@ -1,6 +1,6 @@
 # Changelog — DeBuddy
 
-## Unreleased
+## 0.1.3 — 2026-10-09
 
 - Prefetch is a window now: `explain.prefetch.ahead` statements along the Step Over path (10),
   the first `explain.prefetch.into` statements of every project callee in it (5),
