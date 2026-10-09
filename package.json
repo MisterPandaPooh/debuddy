@@ -389,10 +389,29 @@
           "default": true,
           "description": "Ask the model for example values of declared variables (one extra call per statement). Turn off on slow providers."
         },
-        "explain.prefetch": {
+        "explain.prefetch.ahead": {
           "type": "number",
-          "default": 3,
-          "description": "Statements prepared ahead of the current one, along the Step Over path. Raise it (6\u20138) on slow providers."
+          "default": 10,
+          "minimum": 0,
+          "description": "Statements prepared ahead of the current one along the Step Over path, in the background. Every stop extends the window (infinite scroll)."
+        },
+        "explain.prefetch.into": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "description": "For each project function called in that window, how many of its first statements are prepared, so Step Into is instant. On one-call-per-function providers the whole function is prepared."
+        },
+        "explain.prefetch.depth": {
+          "type": "number",
+          "default": 2,
+          "minimum": 0,
+          "description": "Levels of callees prepared: the functions called in the window, then the functions they call\u2026 0 = only the Step Over path."
+        },
+        "explain.prefetch.parallel": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "description": "Background model calls kept in flight. The statement on screen always gets its own slot. Embedded: one llama.cpp sequence each (more RAM, each one slower); Ollama: bounded by OLLAMA_NUM_PARALLEL; Claude: by explain.claude.sessions."
         },
         "explain.claude.sessions": {
           "type": "number",
@@ -410,6 +429,12 @@
           ],
           "default": "low",
           "description": "--effort passed to the Claude CLI. 'low' is 3x faster on long answers (measured: 300 words in 16 s vs 50 s) with no visible loss on explanations. Empty = CLI default.",
+          "scope": "machine"
+        },
+        "explain.claude.settingSources": {
+          "type": "string",
+          "default": "",
+          "description": "--setting-sources passed to the Claude CLI (comma-separated: user, project, local). Empty = none: ~1 s faster per call, and nothing from settings.json (hooks, plugins, env) applies. Set to 'user' if your login relies on settings.json (apiKeyHelper, env).",
           "scope": "machine"
         },
         "explain.claude.extraArgs": {

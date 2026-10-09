@@ -30,10 +30,13 @@ export class ProviderRegistry implements vscode.Disposable {
     const c = vscode.workspace.getConfiguration('explain');
     switch (c.get<ProviderKind>('provider', 'embedded')) {
       case 'embedded': {
-        const key = c.get<string>('embedded.model', DEFAULT_EMBEDDED);
+        const id = c.get<string>('embedded.model', DEFAULT_EMBEDDED);
+        // One sequence per background call, plus one kept free for the statement on screen.
+        const sequences = Math.max(1, c.get<number>('prefetch.parallel', 2)) + 1;
+        const key = `${id}|${sequences}`;
         if (this.embedded?.key !== key) {
           this.embedded?.provider.dispose();
-          this.embedded = { key, provider: new EmbeddedProvider(this.storageDir, key) };
+          this.embedded = { key, provider: new EmbeddedProvider(this.storageDir, id, sequences) };
         }
         return this.embedded.provider;
       }
@@ -53,6 +56,7 @@ export class ProviderRegistry implements vscode.Disposable {
           extraArgs: [...(effort ? ['--effort', effort] : []), ...c.get<string[]>('claude.extraArgs', [])],
           size: c.get<number>('claude.sessions', 3),
           auth: c.get<'subscription' | 'inherit'>('claude.auth', 'subscription'),
+          settingSources: c.get<string>('claude.settingSources', ''),
         };
         if (!c.get<boolean>('claude.persistentSession', true)) return new ClaudeCliProvider(opts);
         const key = JSON.stringify(opts);

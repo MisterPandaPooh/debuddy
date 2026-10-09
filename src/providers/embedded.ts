@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { restartExplainSession } from '../restart';
 import { errMsg } from '../util';
 import type { ChatProvider } from './types';
 
@@ -39,32 +40,43 @@ export function isEmbeddedModelDownloaded(dir: string, id: string): boolean {
   }
 }
 
-/** Ask before the first download; the user may prefer Ollama. Returns false when declined. */
+/** Ask before the first download; the other button opens the provider picker. Returns false when declined. */
 export async function confirmEmbeddedDownload(id: string): Promise<boolean> {
   const name = id.split('/').pop()?.replace(/\.gguf$/, '') ?? id;
   const size = id === DEFAULT_EMBEDDED ? ` (${EMBEDDED_SIZE_GB} GB)` : '';
   const choice = await vscode.window.showInformationMessage(
     `DeBuddy needs a local model: ${name}${size}. Download it now into the extension storage?`,
-    { modal: true, detail: 'One-time download from Hugging Face. You can switch to Ollama or another provider instead.' },
+    { modal: true, detail: 'One-time download from Hugging Face. Or use Ollama, Claude Code, Cursor, Copilot or an API instead — your subscription works for Claude Code and Cursor.' },
     'Download',
-    'Use Ollama instead',
+    'Set up another provider…',
   );
-  if (choice === 'Use Ollama instead') {
-    await vscode.workspace.getConfiguration('explain').update('provider', 'ollama', vscode.ConfigurationTarget.Global);
-  }
+  if (choice === 'Set up another provider…') void vscode.commands.executeCommand('explain.configure');
   return choice === 'Download';
 }
 
-/** Download a GGUF into `dir` with a cancellable progress notification. Resolves to the file path. */
+/** Models declined this session: a session keeps asking for the model, the user is asked once. */
 const declined = new Set<string>();
+/** The download in progress, so a second caller (status bar + session) joins it instead of asking again. */
+let inProgress: Promise<string | undefined> | undefined;
 
-export async function downloadEmbeddedModel(dir: string, id: string): Promise<string | undefined> {
+/**
+ * Download a GGUF into `dir` with a cancellable progress notification. Resolves to the file path.
+ * `force`: ask again even if declined earlier this session (the user picked embedded on purpose).
+ */
+export async function downloadEmbeddedModel(dir: string, id: string, opts: { force?: boolean } = {}): Promise<string | undefined> {
   if (!isValidEmbeddedId(id)) throw new Error(`invalid embedded model id: ${id}`);
-  if (declined.has(id)) return undefined; // asked once this session: do not nag on every statement
+  if (inProgress) return inProgress;
+  if (declined.has(id) && !opts.force) return undefined;
+  declined.delete(id);
   if (!(await confirmEmbeddedDownload(id))) {
     declined.add(id);
     return undefined;
   }
+  inProgress = runDownload(dir, id).finally(() => (inProgress = undefined));
+  return inProgress;
+}
+
+async function runDownload(dir: string, id: string): Promise<string | undefined> {
   const { createModelDownloader } = await loadLlamaCpp();
   return vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: `DeBuddy: downloading ${id.split('/').pop()}`, cancellable: true },
@@ -112,6 +124,8 @@ export class EmbeddedProvider implements ChatProvider, vscode.Disposable {
       if (!isEmbeddedModelDownloaded(this.dir, this.id)) {
         const file = await downloadEmbeddedModel(this.dir, this.id);
         if (!file) throw new Error('model download declined or cancelled — pick a provider in the status bar');
+        // The session that asked for the model has been waiting on the download: start it over, clean.
+        void restartExplainSession();
       }
       const engine = await llama.getLlama();
       const model = await engine.loadModel({ modelPath: embeddedModelPath(this.dir, this.id) });

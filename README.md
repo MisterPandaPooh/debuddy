@@ -12,10 +12,16 @@
 
 <table align="center">
   <tr>
-    <td align="center" width="25%"><b>🎛️ A native debugger experience</b><br><sub>A real Debug Adapter: F10 / F11 / Shift+F11, breakpoints, call stack, variables, step back, auto-walk</sub></td>
-    <td align="center" width="25%"><b>🔌 Zero configuration, 100% local</b><br><sub>One model download on first use, then no server, no key, no network — your code never leaves the machine</sub></td>
-    <td align="center" width="25%"><b>🧩 VS Code · Cursor · VSCodium</b><br><sub>Any editor that runs VS Code extensions, with the same shortcuts</sub></td>
-    <td align="center" width="25%"><b>🗣️ JavaScript/TypeScript · Python · Rust, natively</b><br><sub>Exact walkers; Go, Java, C#, Swift, PHP, Ruby… through the language server</sub></td>
+    <td align="center" width="25%"><h3>🎛️</h3></td>
+    <td align="center" width="25%"><h3>🔌</h3></td>
+    <td align="center" width="25%"><h3>🧩</h3></td>
+    <td align="center" width="25%"><h3>🗣️</h3></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><b>A native debugger experience</b><br><sub>A real Debug Adapter: F10 / F11 / Shift+F11, breakpoints, call stack, variables, step back, auto-walk</sub></td>
+    <td align="center" valign="top"><b>Zero configuration, 100% local</b><br><sub>One model download on first use, then no server, no key, no network — your code never leaves the machine</sub></td>
+    <td align="center" valign="top"><b>VS Code · Cursor · VSCodium</b><br><sub>Any editor that runs VS Code extensions, with the same shortcuts</sub></td>
+    <td align="center" valign="top"><b>JavaScript/TypeScript · Python · Rust, natively</b><br><sub>Exact walkers; Go, Java, C#, Swift, PHP, Ruby… through the language server</sub></td>
   </tr>
 </table>
 
@@ -43,9 +49,9 @@ You open a function you did not write. Instead of reading it top to bottom and g
 **start DeBuddy on a line and press <kbd>F10</kbd>**. The next statement lights up, and a short card
 appears right under it:
 
-> **Does** Fetches the user by id and attaches its roles.
-> **Why** The order needs the user's email for the audit below.
-> **Watch** ⚠️ Returns null when the id is unknown.
+> **Does** Fetches the user by id and attaches its roles.<br>
+> **Why** The order needs the user's email for the audit below.<br>
+> **Watch** ⚠️ Returns null when the id is unknown.<br>
 > **Throws** 🔥 NotFoundError (from getUser) — caught by `catch (err)` L23
 
 Press <kbd>F11</kbd> on a call and you are inside the callee, with a one-line summary, where it is
@@ -74,7 +80,8 @@ into the extension's storage, once, after asking you. Then it is all local, ~0.5
   then `Extensions → ⋯ → Install from VSIX…`. Works in **VS Code** and **Cursor**.
 
 Prefer your own stack? Pick it from the status bar: Ollama (any model), GitHub Copilot models,
-an OpenAI-compatible API, the Claude Code CLI or the Cursor CLI — see [Providers](#providers).
+an OpenAI-compatible API, the Claude Code CLI or the Cursor CLI — the last two run on the
+subscription you already have. See [Model providers](#model-providers).
 
 ## 60-second tour
 
@@ -89,7 +96,7 @@ an OpenAI-compatible API, the Claude Code CLI or the Cursor CLI — see [Provide
 | <kbd>F10</kbd> on a `throw` | jumps to the `catch` that receives it, or says it leaves the function |
 | 💥 (toolbar) on a call that *may* throw | follows that possibility instead of the happy path |
 | <kbd>F9</kbd> then <kbd>F5</kbd> | runs silently to the breakpoint — across calls, like a debugger |
-| ▶▶ (toolbar) or <kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>A</kbd> | **auto-walk**: advances every few seconds; <kbd>F6</kbd> pauses |
+| ▶▶ (toolbar) or <kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>A</kbd> | **auto-walk**: prepares the statements ahead (progress notification), then advances every few seconds; <kbd>F6</kbd> pauses |
 | ◀ Step Back | previous stops, call stack included |
 | hover a variable | an example value that matches its type (`user = { id: "u_42" } // or: null`) |
 | type in the Debug Console | a question about the current line, answered with its context |
@@ -111,32 +118,45 @@ an OpenAI-compatible API, the Claude Code CLI or the Cursor CLI — see [Provide
 
 ## Languages
 
-| Walker | Languages | Precision |
-|---|---|---|
-| TypeScript compiler | TypeScript, JavaScript, TSX, JSX | exact: statements, `if` branches, `try/catch/finally`, throws |
-| tree-sitter (`web-tree-sitter` + a 0.5–1 MB grammar) | Python, Rust | exact: `raise`/`except`, `?`/`Err`/`panic!`, `match` arms as branches |
-| LSP-generic (document symbols + selection ranges + keyword tables) | Go, Java, Kotlin, Scala, C#, C, C++, Objective-C, Dart, Swift, PHP, Ruby | depends on the language server; branches and `try` by indentation/braces |
+<p align="center">
+  <img src="images/lang/javascript.png" height="56" alt="JavaScript">&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="images/lang/typescript.png" height="56" alt="TypeScript">&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="images/lang/python.png" height="56" alt="Python">&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="images/lang/rust.png" height="56" alt="Rust">
+  <br>
+  <sub><b>Supported natively</b> — exact syntax walkers: statements, <code>if</code> branches, <code>try/catch/finally</code>, <code>raise</code>/<code>except</code>, <code>?</code>/<code>Err</code>/<code>panic!</code>, <code>match</code> arms as branches.</sub>
+</p>
+
+**Other languages** — Go, Java, Kotlin, Scala, C#, C, C++, Objective-C, Dart, Swift, PHP, Ruby… —
+go through the **LSP-generic walker**: statements come from the language server's document
+symbols and selection ranges, branches and `try` from keyword tables. Precision depends on the
+language server you have installed.
 
 Step Into works even without a language server: the walker finds the function in the file,
 then in the workspace. With one (Pylance, rust-analyzer, gopls…) you also get types and callers.
 
-## Providers
+## Model providers
 
 `explain.provider` picks the model; everything (steps, summaries, values, console) goes through it.
-Change it from the status bar (`Explain: embedded · Qwen2.5-Coder 3B`).
+Change it from the status bar (`DeBuddy: embedded · Qwen2.5-Coder 3B`). **Claude Code and Cursor
+work with the subscription you already have** — no API key, nothing billed per token.
 
 | Provider | Needs | Per-step | Notes |
 |---|---|---|---|
-| `embedded` (default) | nothing: llama.cpp (`node-llama-cpp`) inside the extension, model downloaded once after confirmation | ~0.7 s | one model, the measured sweet spot; +55 MB of extension (native binary per platform) |
+| `embedded` (default) | nothing to install | ~0.7 s | one model, the measured sweet spot; +55 MB of extension (native binary per platform) |
 | `ollama` | Ollama + any model (`explain.model`) | ~0.4 s | tiers measured in [bench/RESULTS.md](bench/RESULTS.md): `qwen2.5-coder:0.5b` (0.4 GB) → `3b` (default) → `7b` → `qwen2.5:14b` (9 GB); above 2 GB latency grows faster than accuracy |
 | `openai` | base URL + `DeBuddy: Set API key` | 1–3 s | OpenRouter, OpenAI, LM Studio, vLLM, Ollama's `/v1`; the key lives in VS Code secret storage |
 | `vscode-lm` | GitHub Copilot (or any Language Model Chat Provider extension) | 1–3 s | one consent prompt; not available in Cursor |
-| `claude-cli` | Claude Code CLI signed in (subscription or key) | ~2 s amortized | one call per **function**, a pool of persistent sessions, `--effort low`; API-key env vars are hidden so it can only use your login |
-| `cursor-cli` | Cursor Agent CLI, `agent login` once | ? | reuses the Cursor subscription; pick the model (effort is in its name) from the status bar |
+| `claude-cli` | Claude Code CLI, signed in with your **Claude subscription** (Pro/Max) | ~3 s amortized | one call per **function**, a pool of persistent sessions, `--effort low`, settings/hooks/MCP skipped; API-key env vars are hidden so it can only use your login |
+| `cursor-cli` | Cursor Agent CLI, `agent login` once — your **Cursor subscription** | ~5–15 s | one call per function; pick the model from the status bar (effort is in its name; the Free plan only allows `auto`) |
 
 On seconds-per-call providers the extension makes **one call per function**: the function, its
 resolved callees, types, tests and throw sites go once, and every statement, the summary and the
 example values are cached from that single answer. Local models keep one call per statement.
+
+Whatever the provider, the statements ahead are prepared in the background while you read: the
+Step Over path, the first lines of the functions it calls, two levels down (`explain.prefetch.*`).
+Auto-walk prepares that window first, with a progress notification, then never waits on the model.
 
 Your code leaves your machine only with `openai`, `vscode-lm`, `claude-cli` or `cursor-cli` — and
 only to the service you chose.
@@ -149,21 +169,13 @@ only to the service you chose.
 | `explain.language` | `English` | language of the prose (labels stay) |
 | `explain.askBranch` | `true` | F10 on an `if` asks which branch to follow |
 | `explain.auto.dwellMs` | `3000` | milliseconds per line in auto-walk |
-| `explain.prefetch` | `3` | statements prepared ahead while you read |
+| `explain.prefetch.ahead` | `10` | statements prepared ahead along the Step Over path, in the background (every stop extends the window) |
+| `explain.prefetch.into` | `5` | first statements of each callee in that window, so Step Into is instant |
+| `explain.prefetch.depth` | `2` | levels of callees prepared (0 = only the Step Over path) |
+| `explain.prefetch.parallel` | `2` | background model calls in flight; the statement on screen always has its own slot |
 | `explain.context.definitionDepth` | `2` | go-to-definition levels fed to the model |
 | `explain.exampleValues` | `true` | one extra local call per statement for example values |
 | `explain.preload` | `false` | load the model as soon as a supported file is open (otherwise it loads when a session starts, overlapping with the first explanation) |
-
-## How it is built
-
-A Debug Adapter that runs nothing: "execution" is walking statements of the AST. That buys the
-native toolbar, F-keys, call stack and breakpoints for free. Deterministic facts (callees, types,
-throw sites, tests, callers) are gathered through the language server and the AST, then a small
-model turns them into three lines — it never has to guess, which is why a 3B model is enough.
-
-Layout: `src/adapter.ts` (stepping, breakpoints, auto-walk, throw flow), `src/lang/`
-(walkers + registry), `src/providers/` (one file per backend + registry), `src/context.ts` (what
-the model sees), `src/explain.ts` (prompts), `src/ui.ts` (thread, hover, pickers).
 
 ## Develop
 
@@ -184,14 +196,6 @@ VS Code gotchas met here, all silent: `@vscode/debugadapter` dispatches `setBrea
 `setBreak**P**ointsRequest`; manifest contributions load only when a host **window starts**
 (close it, launch a new one); the debug toolbar menu id is `debug/tool**B**ar`; `web-tree-sitter`
 must stay outside the esbuild bundle (its `createRequire(import.meta.url)`).
-
-## Similar tools
-
-Plenty of extensions explain a *selection* (Copilot, Continue, Cody, Ollama front-ends), and a few
-narrate a *walkthrough* a coding agent wrote (AI Code Walkthrough, Agent Walkthrough, Code
-Walkthrough — Claude-backed). CodeTour plays recorded tours. What they do not do is the debugger
-part: deterministic stepping through the call graph, branch choice, exception flow, breakpoints,
-step back — with the explanation following you. That is the gap DeBuddy fills, locally — a placebo debugger: no side effects, real results.
 
 ## License
 

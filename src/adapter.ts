@@ -33,6 +33,13 @@ interface Prepared {
   explanation: Explanation;
   values: Promise<ExampleValue[]>;
 }
+
+/** A statement to prepare ahead of time. */
+interface Target {
+  frame: Frame;
+  step: Step;
+}
+const frameKey = (f: Frame) => `${f.uri.fsPath}:${f.startLine}`;
 const BANNER = '⚠️ _Static walkthrough: nothing is executed. Values are illustrative, branches are read in source order._';
 
 interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
@@ -56,6 +63,13 @@ export class ExplainSession extends DebugSession {
   private explainToken = 0;
   /** Explanations by statement, so the next step (prefetched) and Step Back are instant. */
   private prepared = new Map<string, Promise<Prepared>>();
+  /** Callee frames resolved for prefetching, by call site. Never pushed on the stack (frames there are mutable). */
+  private callees = new Map<string, Promise<Frame | undefined>>();
+  /** Background preparation: at most `explain.prefetch.parallel` calls in flight; the statement on screen bypasses it. */
+  private prefetchRunning = 0;
+  private prefetchQueue: (() => void)[] = [];
+  /** Bumped at every stop: queued work for an older position is dropped when its turn comes. */
+  private prefetchGen = 0;
   /** One in-flight whole-function call per frame (slow providers): fills `prepared` for every step. */
   private batches = new Map<string, Promise<Map<number, Prepared>>>();
   /** Function summaries obtained from a batch, so the step-into header costs nothing. */
@@ -130,6 +144,8 @@ export class ExplainSession extends DebugSession {
     }
     this.stack = [frame];
     this.sendResponse(response);
+    // A previous session may have ended mid-walk: the toolbar buttons must not stay hidden.
+    void vscode.commands.executeCommand('setContext', 'explain.autoWalking', false);
     // Warm the provider in parallel with the first explanation; the status bar says why it may take a moment.
     const warm = this.src.explainer.warmUp().catch((err) => this.log(`warm-up: ${errMsg(err)}`));
     vscode.window.setStatusBarMessage('$(sync~spin) DeBuddy: loading model…', warm);
@@ -407,7 +423,14 @@ export class ExplainSession extends DebugSession {
     const dwell = vscode.workspace.getConfiguration('explain.auto').get<number>('dwellMs', 3000);
     this.log(`auto: start (dwell ${dwell} ms)`);
     try {
+      await this.preloadWindow(run);
+      if (run.cancelled) return;
       await this.autoLoop(run, dwell);
+      // The loop ran out without stopping anywhere: stop here rather than stay "running" forever.
+      if (this.auto === run) {
+        this.cancelAuto();
+        void this.stopAt('step');
+      }
     } catch (err) {
       this.log(`auto: crashed — ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
       if (this.auto === run) {
@@ -542,6 +565,7 @@ export class ExplainSession extends DebugSession {
 
   protected disconnectRequest(response: DebugProtocol.DisconnectResponse): void {
     this.explainToken++;
+    this.prefetchGen++;
     this.cancelAuto();
     this.onDispose?.();
     this.ui.clear();
@@ -661,11 +685,8 @@ export class ExplainSession extends DebugSession {
         this.ui.hover.set(frame.uri, v, ctx.vars);
         this.sendEvent(new InvalidatedEvent(['variables'], THREAD_ID));
       }).catch((err) => this.log(`values: ${err}`));
-      // Warm the statements ahead while the user reads this one (explain.prefetch of them).
-      const ahead = vscode.workspace.getConfiguration('explain').get<number>('prefetch', 3);
-      for (const next of this.peekAhead(slow ? Math.max(ahead, 8) : ahead)) {
-        void this.prepare(next.frame, next.step).catch(() => undefined);
-      }
+      // Warm what lies ahead while the user reads this one; every stop extends the window.
+      this.prefetchAround();
     } catch (err) {
       if (token === this.explainToken) this.ui.showError(frame.uri, step.line, err);
     }
@@ -673,7 +694,7 @@ export class ExplainSession extends DebugSession {
 
   private async frameHeader(frame: Frame): Promise<string> {
     const depth = vscode.workspace.getConfiguration('explain.context').get<number>('definitionDepth', 2);
-    const batchKey = `${frame.uri.fsPath}:${frame.startLine}:${hashOf(frame.source)}`;
+    const batchKey = this.batchKey(frame);
     const [summary, callers] = await Promise.all([
       // With a per-function batch the summary comes with it: wait for the batch instead of a second call.
       this.batchPerFunction()
@@ -686,8 +707,16 @@ export class ExplainSession extends DebugSession {
   }
 
   /** Context + explanation + (pending) values for a statement, computed once per statement text. */
+  private prepareKey(frame: Frame, step: Step): string {
+    return `${frame.uri.fsPath}:${step.line}:${step.text}:${hashOf(frame.source)}`;
+  }
+
+  private batchKey(frame: Frame): string {
+    return `${frame.uri.fsPath}:${frame.startLine}:${hashOf(frame.source)}`;
+  }
+
   private prepare(frame: Frame, step: Step): Promise<Prepared> {
-    const key = `${frame.uri.fsPath}:${step.line}:${step.text}:${hashOf(frame.source)}`;
+    const key = this.prepareKey(frame, step);
     let p = this.prepared.get(key);
     if (!p) {
       p = (async () => {
@@ -718,7 +747,7 @@ export class ExplainSession extends DebugSession {
 
   /** Context resolved once, one model call, results keyed by statement line. */
   private prepareFunction(frame: Frame): Promise<Map<number, Prepared>> {
-    const key = `${frame.uri.fsPath}:${frame.startLine}:${hashOf(frame.source)}`;
+    const key = this.batchKey(frame);
     let p = this.batches.get(key);
     if (!p) {
       p = (async () => {
@@ -766,12 +795,113 @@ export class ExplainSession extends DebugSession {
     return out;
   }
 
+  private prefetchSettings() {
+    const c = vscode.workspace.getConfiguration('explain.prefetch');
+    return {
+      ahead: Math.max(0, c.get<number>('ahead', 10)),
+      into: Math.max(0, c.get<number>('into', 5)),
+      depth: Math.max(0, c.get<number>('depth', 2)),
+      parallel: Math.max(1, c.get<number>('parallel', 2)),
+    };
+  }
+
+  /**
+   * Statements worth preparing from here, nearest first: `ahead` along the Step Over path, then
+   * the first `into` statements of the project functions those call, `depth` levels down.
+   */
+  private async prefetchWindow(): Promise<Target[]> {
+    const { ahead, into, depth } = this.prefetchSettings();
+    const out = this.peekAhead(ahead);
+    const seen = new Set(this.stack.map(frameKey));
+    let layer: Target[] = [{ frame: this.top, step: this.top.steps[this.top.index] }, ...out];
+    for (let d = 0; d < depth && layer.length; d++) {
+      const found = await Promise.all(layer.map(({ frame, step }) => Promise.all(step.calls.map((call) => this.prefetchCallee(frame, step, call)))));
+      const next: Target[] = [];
+      for (const callee of found.flat()) {
+        if (!callee || seen.has(frameKey(callee))) continue;
+        seen.add(frameKey(callee));
+        next.push(...callee.steps.slice(0, into).map((step) => ({ frame: callee, step })));
+      }
+      out.push(...next);
+      layer = next;
+    }
+    return out;
+  }
+
+  private prefetchCallee(frame: Frame, step: Step, call: Step['calls'][number]): Promise<Frame | undefined> {
+    const key = `${frame.uri.fsPath}:${call.position.line}:${call.position.character}:${call.name}:${hashOf(frame.source)}`;
+    let p = this.callees.get(key);
+    if (!p) {
+      p = calleeFrame(frame.uri, call, stepIntoReason(frame, step)).catch(() => undefined);
+      this.callees.set(key, p);
+    }
+    return p;
+  }
+
+  /** One task per statement — or per function when the provider answers a whole function in one call. */
+  private prefetchTasks(targets: Target[]): (() => Promise<unknown>)[] {
+    if (this.batchPerFunction()) {
+      const frames = new Map<string, Frame>();
+      for (const t of targets) if (!this.batches.has(this.batchKey(t.frame))) frames.set(this.batchKey(t.frame), t.frame);
+      return [...frames.values()].map((f) => () => this.prepareFunction(f));
+    }
+    return targets
+      .filter((t) => !this.prepared.has(this.prepareKey(t.frame, t.step)))
+      .map((t) => () => this.prepare(t.frame, t.step).then((p) => p.values));
+  }
+
+  /** Prepare the window ahead in the background, nearest first; the statement on screen never waits for it. */
+  private prefetchAround() {
+    const gen = ++this.prefetchGen;
+    void this.prefetchWindow()
+      .then((targets) => {
+        if (gen !== this.prefetchGen) return;
+        for (const task of this.prefetchTasks(targets)) void this.throttled(() => (gen === this.prefetchGen ? task() : Promise.resolve()));
+      })
+      .catch((err) => this.log(`prefetch: ${errMsg(err)}`));
+  }
+
+  /** Run `task` once fewer than `explain.prefetch.parallel` background calls are in flight. Never rejects. */
+  private throttled(task: () => Promise<unknown>): Promise<void> {
+    return new Promise((resolve) => {
+      const start = () => {
+        this.prefetchRunning++;
+        task()
+          .catch(() => undefined)
+          .finally(() => {
+            this.prefetchRunning--;
+            if (this.prefetchRunning < this.prefetchSettings().parallel) this.prefetchQueue.shift()?.();
+            resolve();
+          });
+      };
+      this.prefetchRunning < this.prefetchSettings().parallel ? start() : this.prefetchQueue.push(start);
+    });
+  }
+
+  /** Before an auto-walk: prepare the whole window first, with a progress notification, so the walk never waits on the model. */
+  private async preloadWindow(run: { cancelled: boolean; wake: () => void }) {
+    const tasks = this.prefetchTasks(await this.prefetchWindow());
+    if (!tasks.length || run.cancelled) return;
+    this.log(`auto: preparing ${tasks.length} ${this.batchPerFunction() ? 'functions' : 'statements'} before walking`);
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'DeBuddy: preparing the walk', cancellable: true },
+      async (progress, token) => {
+        let done = 0;
+        progress.report({ message: `0 / ${tasks.length}` });
+        const all = Promise.all(tasks.map((t) => this.throttled(t).then(() => progress.report({ message: `${++done} / ${tasks.length}`, increment: 100 / tasks.length }))));
+        // Cancel (the notification) starts walking now; Pause (the toolbar) ends the auto-walk through run.wake.
+        await Promise.race([all, new Promise<void>((r) => token.onCancellationRequested(() => r())), new Promise<void>((r) => (run.wake = r))]);
+      },
+    );
+  }
+
   /** Settings changed (provider, context…): what was prepared no longer matches. */
   invalidate() {
     this.prepared.clear();
     this.batches.clear();
     this.summaries.clear();
     this.explainToken++;
+    this.prefetchGen++;
     if (this.stack.length) void this.present('step', false).catch((err) => this.recover(err));
   }
 }

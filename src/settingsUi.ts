@@ -5,6 +5,7 @@ import { DEFAULT_EMBEDDED, EMBEDDED_LABEL, downloadEmbeddedModel, isEmbeddedMode
 import { supportedLanguageIds } from './lang';
 import { resolveCursorBin } from './providers/cursor';
 import { ProviderKind } from './providers/types';
+import { restartExplainSession } from './restart';
 
 // Measured in bench/RESULTS.md: above ~2 GB latency grows faster than accuracy with this prompt.
 const OLLAMA_TIERS = [
@@ -112,8 +113,17 @@ export class SettingsUi implements vscode.Disposable {
     const pick = await vscode.window.showQuickPick(items, { placeHolder: 'DeBuddy: which model explains your code?' });
     if (!pick) return;
     if (!pick.provider) return void vscode.commands.executeCommand('workbench.action.openSettings', '@ext:MisterPandaPooh.debuddy');
+    const before = this.modelSignature();
     await c.update('provider', pick.provider, vscode.ConfigurationTarget.Global);
     await this.pickModel(pick.provider);
+    // A walk in progress was prepared with the previous model: start it over on the new one.
+    if (this.modelSignature() !== before) void restartExplainSession();
+  }
+
+  /** The settings that decide which model answers; when they change a running session starts over. */
+  private modelSignature(): string {
+    const c = vscode.workspace.getConfiguration('explain');
+    return JSON.stringify(['provider', 'embedded.model', 'model', 'claude.model', 'cursor.model', 'vscodeLm.family', 'openai.model', 'openai.baseUrl'].map((k) => c.get(k)));
   }
 
   private async pickModel(kind: ProviderKind) {
@@ -121,12 +131,13 @@ export class SettingsUi implements vscode.Disposable {
     const set = (key: string, value: string) => c.update(key, value, vscode.ConfigurationTarget.Global);
     switch (kind) {
       case 'embedded': {
-        // One model, no choice to make: just make sure it is on disk.
+        // One model, no choice to make: just make sure it is on disk. Picking it here is deliberate,
+        // so the question is asked again even if the first dialog was dismissed.
         const id = c.get<string>('embedded.model', DEFAULT_EMBEDDED);
         if (isEmbeddedModelDownloaded(this.storageDir, id)) {
           void vscode.window.setStatusBarMessage(`$(check) DeBuddy: ${EMBEDDED_LABEL} is downloaded`, 4000);
         } else {
-          await downloadEmbeddedModel(this.storageDir, id);
+          await downloadEmbeddedModel(this.storageDir, id, { force: true });
         }
         return;
       }

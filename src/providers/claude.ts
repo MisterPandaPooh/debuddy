@@ -2,8 +2,21 @@ import { spawn } from 'child_process';
 import { run } from './cli';
 import { ChatProvider } from './types';
 
-// Flags that skip Claude Code's session bootstrap (MCP servers, hooks) — the login still applies.
-const CLAUDE_SLIM = ['--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--no-session-persistence', '--tools', ''];
+// Flags that skip Claude Code's session bootstrap (settings, hooks, plugins, skills, MCP servers) —
+// the login still applies. Measured: ~3.3 s per turn instead of ~4.5 s. `--bare` would be faster
+// still, but it ignores the OAuth login (API key only), so it is out for the subscription.
+function slimFlags(settingSources = ''): string[] {
+  return ['--setting-sources', settingSources, '--disable-slash-commands', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--no-session-persistence', '--tools', ''];
+}
+
+interface ClaudeOpts {
+  model?: string;
+  bin?: string;
+  extraArgs?: string[];
+  auth?: 'subscription' | 'inherit';
+  /** `--setting-sources`: empty = none loaded (fastest); `user` if the login relies on settings.json. */
+  settingSources?: string;
+}
 
 /**
  * Environment for the claude process. With `subscription`, API-key variables are removed so the
@@ -25,12 +38,12 @@ function loginHint(msg: string): string {
 export class ClaudeCliProvider implements ChatProvider {
   readonly name: string;
   readonly slow = true;
-  constructor(private opts: { model?: string; bin?: string; extraArgs?: string[]; auth?: 'subscription' | 'inherit' }) {
+  constructor(private opts: ClaudeOpts) {
     this.name = `claude-cli/${opts.model || 'default'}`;
   }
 
   chat(system: string, user: string): Promise<string> {
-    const args = ['-p', '--output-format', 'text', '--system-prompt', system, ...CLAUDE_SLIM, ...(this.opts.extraArgs ?? [])];
+    const args = ['-p', '--output-format', 'text', '--system-prompt', system, ...slimFlags(this.opts.settingSources), ...(this.opts.extraArgs ?? [])];
     if (this.opts.model) args.push('--model', this.opts.model);
     return run(this.opts.bin || 'claude', args, { stdin: user, env: claudeEnv(this.opts.auth), hint: loginHint });
   }
@@ -44,7 +57,7 @@ class ClaudeSession {
   private buf = '';
   busy = 0;
 
-  constructor(private opts: { model?: string; bin?: string; maxTurns?: number; extraArgs?: string[]; auth?: 'subscription' | 'inherit' }) {}
+  constructor(private opts: ClaudeOpts & { maxTurns?: number }) {}
 
   async turn(content: string): Promise<string> {
     this.busy++;
@@ -77,7 +90,7 @@ class ClaudeSession {
     this.child?.kill();
     this.turns = 0;
     this.buf = '';
-    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', ...CLAUDE_SLIM,
+    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', ...slimFlags(this.opts.settingSources),
       '--system-prompt', 'Each user message is an independent task with its own instructions. Answer only the latest one, follow its format exactly, no preamble.',
       ...(this.opts.extraArgs ?? [])];
     if (this.opts.model) args.push('--model', this.opts.model);
@@ -140,7 +153,7 @@ export class ClaudeSessionProvider implements ChatProvider {
   private sessions: ClaudeSession[];
   private queues: Promise<unknown>[];
 
-  constructor(opts: { model?: string; bin?: string; maxTurns?: number; extraArgs?: string[]; size?: number; auth?: 'subscription' | 'inherit' }) {
+  constructor(opts: ClaudeOpts & { maxTurns?: number; size?: number }) {
     this.name = `claude-session/${opts.model || 'default'}`;
     const size = Math.max(1, opts.size ?? 3);
     this.sessions = Array.from({ length: size }, () => new ClaudeSession(opts));

@@ -1,5 +1,23 @@
 # Changelog — DeBuddy
 
+## Unreleased
+
+- Prefetch is a window now: `explain.prefetch.ahead` statements along the Step Over path (10),
+  the first `explain.prefetch.into` statements of every project callee in it (5),
+  `explain.prefetch.depth` levels down (2), prepared in the background with
+  `explain.prefetch.parallel` calls in flight (2). The statement on screen never waits behind it,
+  and every stop extends the window (infinite scroll). Replaces `explain.prefetch`.
+- Auto-walk prepares that window first, with a progress notification (Cancel starts walking now).
+- First-run dialog: "Set up another provider…" opens the provider picker. Picking Embedded there
+  asks for the download again even if the first dialog was dismissed. A session that was waiting
+  for the download, or whose provider/model changed from the status bar, restarts from scratch.
+- Claude CLI: `--setting-sources "" --disable-slash-commands` (~3.3 s per turn instead of ~4.5 s);
+  `explain.claude.settingSources` loads settings.json back when the login needs it. `--bare` is
+  not usable with the subscription login (API key only).
+- The auto-walk context key is reset at launch and when the walk ends, so ▶▶ / 💥 / ⚙ cannot
+  stay hidden after a session ended mid-walk.
+- README: model providers (subscriptions), language logos, card on four lines, highlights table.
+
 ## 0.1.2 — 2026-10-09
 
 - While the auto-walk runs, only Pause / Restart / Stop remain: the throw and settings buttons
