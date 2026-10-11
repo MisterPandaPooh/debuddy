@@ -1,5 +1,15 @@
 # Changelog — DeBuddy
 
+## Unreleased
+
+- Calls inside a statement are listed in evaluation order (`a(...b())` → `b`, then `a`): Step
+  Into enters the inner call first, Step Out comes back to the call site while an outer call
+  remains, and *Step Into Target…* (editor context menu while stopped) lets you pick the call.
+- The end of the entry function no longer ends the session: the walk parks on the last
+  statement; F5 from there or Stop ends it. Step Out of the entry function runs to that end.
+- The Debug Console keeps the last eight questions and answers of the session in mind, so
+  follow-ups ("and why?") work.
+
 ## 0.1.3 — 2026-10-09
 
 - Prefetch is a window now: `explain.prefetch.ahead` statements along the Step Over path (10),

@@ -52,6 +52,8 @@ export interface Frame {
   namePosition?: vscode.Position;
   /** Line ranges the user chose not to explore (the other side of an `if`). */
   skip: Branch[];
+  /** How many of the current statement's calls were already stepped into (they run in order). */
+  enteredCalls?: number;
 }
 
 /** What a language has to provide: turn a position into a walkable function. */

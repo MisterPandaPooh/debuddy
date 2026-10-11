@@ -15,7 +15,7 @@ import {
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { ContextSources, buildContext, buildFunctionContext, stepThrows, summarizeFrame } from './context';
-import { ExampleValue, Explanation, StatementContext } from './explain';
+import { ExampleValue, Explanation, QA, StatementContext } from './explain';
 import { Branch, Frame, Step, calleeFrame, frameAt, hoverText, referencesOf, stepIntoReason } from './lang';
 import { ExplainUi } from './ui';
 
@@ -58,7 +58,7 @@ export class ExplainSession extends DebugSession {
   private values: ExampleValue[] = [];
   private context?: StatementContext;
   /** Snapshots of (frame, index) per stop, for Step Back / Reverse Continue. */
-  private history: { stack: Frame[]; indices: number[]; skips: Branch[][]; reason: string }[] = [];
+  private history: { stack: Frame[]; indices: number[]; entered: number[]; skips: Branch[][]; reason: string }[] = [];
   private firstStop = true;
   private explainToken = 0;
   /** Explanations by statement, so the next step (prefetched) and Step Back are instant. */
@@ -80,6 +80,8 @@ export class ExplainSession extends DebugSession {
   private exceptionFilters = new Set<string>();
   /** What the current statement can throw (deterministic), for the 💥 button and the UI. */
   private currentThrows: string[] = [];
+  /** The last Debug Console exchanges, so a follow-up question has them in mind. */
+  private qa: QA[] = [];
 
   constructor(private ui: ExplainUi, private src: ContextSources, private onDispose?: () => void) {
     super();
@@ -118,6 +120,8 @@ export class ExplainSession extends DebugSession {
     response.body = {
       supportsConfigurationDoneRequest: true,
       supportsStepBack: true,
+      // "Step Into Target…" lists the calls of the statement still to be entered.
+      supportsStepInTargetsRequest: true,
       // Hover is served by a HoverProvider merged into the language hover (see ui.ts).
       supportsEvaluateForHovers: false,
       supportsFunctionBreakpoints: true,
@@ -235,7 +239,10 @@ export class ExplainSession extends DebugSession {
     try {
       if (args.context === 'repl') {
         if (!this.context) return ok('Still explaining this statement — ask again in a moment.');
-        return ok(await this.src.explainer.answer(this.context, expr));
+        const a = await this.src.explainer.answer(this.context, expr, this.qa);
+        this.qa.push({ line: this.top.steps[this.top.index].line, q: expr, a });
+        if (this.qa.length > 8) this.qa.shift();
+        return ok(a);
       }
       const known = this.values.find((x) => x.name === expr);
       const type = this.context?.vars.find((x) => x.startsWith(`${expr}:`)) ?? (await this.typeOfLocal(expr));
@@ -283,13 +290,18 @@ export class ExplainSession extends DebugSession {
 
   /** Remember where we are, so Step Back / Reverse Continue can come back to it. */
   private snapshot(reason: string) {
-    this.history.push({ stack: [...this.stack], indices: this.stack.map((f) => f.index), skips: this.stack.map((f) => [...f.skip]), reason });
+    const snap = { stack: [...this.stack], indices: this.stack.map((f) => f.index), entered: this.stack.map((f) => f.enteredCalls ?? 0), skips: this.stack.map((f) => [...f.skip]), reason };
+    // Stopping twice at the same place (F10 on the parked end) must not pad the Step Back history.
+    const last = this.history.at(-1);
+    if (last && last.stack.length === snap.stack.length && last.stack.every((f, i) => f === snap.stack[i] && last.indices[i] === snap.indices[i] && last.entered[i] === snap.entered[i])) return;
+    this.history.push(snap);
   }
 
-  private restore(snap: { stack: Frame[]; indices: number[]; skips: Branch[][] }) {
+  private restore(snap: { stack: Frame[]; indices: number[]; entered: number[]; skips: Branch[][] }) {
     this.stack = [...snap.stack];
     snap.stack.forEach((f, i) => {
       f.index = snap.indices[i];
+      f.enteredCalls = snap.entered[i];
       f.skip = [...snap.skips[i]];
     });
     this.uncaughtAt = undefined;
@@ -388,7 +400,7 @@ export class ExplainSession extends DebugSession {
       }
       if (this.stack.length === 1) {
         // No handler anywhere: stay put and say so; the next Step Over leaves the function.
-        this.pendingHeader = `💥 **${what}** is not caught${unwound.length ? ` in ${unwound.join(' → ')} nor` : ''} here — it leaves ${frame.name}() to its caller. _F10 ends the walk._`;
+        this.pendingHeader = `💥 **${what}** is not caught${unwound.length ? ` in ${unwound.join(' → ')} nor` : ''} here — it leaves ${frame.name}() to its caller. _F10 parks at the end of the walk._`;
         if (step.throwsSelf) this.uncaughtAt = `${frame.uri.fsPath}:${step.line}`;
         this.log(`throw: ${what} unhandled, leaves ${frame.name}()`);
         return false;
@@ -508,7 +520,7 @@ export class ExplainSession extends DebugSession {
     }
   }
 
-  protected async stepInRequest(response: DebugProtocol.StepInResponse) {
+  protected async stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments) {
     this.sendResponse(response);
     const caller = this.top;
     const step = caller.steps[caller.index];
@@ -517,21 +529,51 @@ export class ExplainSession extends DebugSession {
       caller.skip = caller.skip.filter((b) => !(b.from === step.body!.from && b.to === step.body!.to));
       return this.moveNext() ? void this.stopAt('step') : this.end();
     }
-    for (const call of step.calls) {
-      const frame = await calleeFrame(caller.uri, call, stepIntoReason(caller, step));
+    // Calls are listed in evaluation order (`a(b())` → b, a); each Step Into takes the next one not entered yet.
+    for (let j = args.targetId ?? caller.enteredCalls ?? 0; j < step.calls.length; j++) {
+      const frame = await calleeFrame(caller.uri, step.calls[j], stepIntoReason(caller, step));
       if (!frame) continue;
+      caller.enteredCalls = j + 1;
       this.stack.push(frame);
       void this.stopAt(this.functionBreakpoints.has(frame.name) ? 'function breakpoint' : 'step', true);
       return;
     }
-    // Nothing to enter: behave like Step Over.
+    // Nothing (left) to enter: behave like Step Over.
     this.moveNext() ? void this.stopAt('step') : this.end();
   }
 
-  protected stepOutRequest(response: DebugProtocol.StepOutResponse): void {
+  /** "Step Into Target…": the project calls of the statement still to be made, in evaluation order. */
+  protected async stepInTargetsRequest(response: DebugProtocol.StepInTargetsResponse) {
+    const targets: DebugProtocol.StepInTarget[] = [];
+    try {
+      const frame = this.top;
+      const step = frame.steps[frame.index];
+      for (let j = frame.enteredCalls ?? 0; j < step.calls.length; j++) {
+        if (await this.prefetchCallee(frame, step, step.calls[j])) targets.push({ id: j, label: `${step.calls[j].name}()` });
+      }
+    } catch (err) {
+      this.log(`stepInTargets: ${errMsg(err)}`);
+    }
+    response.body = { targets };
     this.sendResponse(response);
-    this.stack.pop();
-    if (this.stack.length === 0) return this.end();
+  }
+
+  protected async stepOutRequest(response: DebugProtocol.StepOutResponse) {
+    this.sendResponse(response);
+    if (this.stack.length === 1) {
+      // Step Out of the entry function: run it to its end and park there, like a debugger leaving main().
+      while (this.moveNext());
+      return this.end();
+    }
+    const callee = this.stack.pop()!;
+    const caller = this.top;
+    const step = caller.steps[caller.index];
+    // Back on the call site: if an outer call is still to be made (`a(b())` after b), stay here like a debugger would.
+    for (let j = caller.enteredCalls ?? 0; j < step.calls.length; j++) {
+      if (!(await this.prefetchCallee(caller, step, step.calls[j]))) continue;
+      this.pendingHeader = `↩ back from **${callee.name}()** — \`${step.calls[j].name}()\` is still to be called: F11 enters it, F10 moves on.`;
+      return void this.stopAt('step');
+    }
     this.moveNext() ? void this.stopAt('step') : this.end();
   }
 
@@ -552,9 +594,9 @@ export class ExplainSession extends DebugSession {
       if (this.atBreakpoint()) return void this.stopAt('breakpoint');
       if (await this.atExceptionBreakpoint()) return void this.stopAt('exception');
     }
-    // No breakpoint ahead: park on the last statement instead of vanishing silently.
+    // No breakpoint ahead: park on the last statement; F5 again from there ends the session.
     if (this.stack.length && !wasAtEnd) return void this.stopAt('end');
-    this.end();
+    this.terminate();
   }
 
   private atLastStep(): boolean {
@@ -596,9 +638,12 @@ export class ExplainSession extends DebugSession {
       const f = this.top;
       while (f.index + 1 < f.steps.length) {
         f.index++;
+        f.enteredCalls = 0;
         const s = f.steps[f.index];
         if (!f.skip.some((b) => s.line >= b.from && s.line <= b.to)) return true;
       }
+      // The entry function is done: stay parked on its last statement rather than vanish.
+      if (this.stack.length === 1) return false;
       this.stack.pop();
     }
     return false;
@@ -618,11 +663,25 @@ export class ExplainSession extends DebugSession {
     this.ui.log(msg);
   }
 
+  /**
+   * Nothing left to read: park on the last statement, as a debugger stays at the end until you
+   * stop it. The session terminates only when no frame is left (F5 from the end, Stop).
+   */
   private end() {
-    this.log('end of walk, session terminated');
     this.cancelAuto();
+    if (this.stack.length) {
+      this.log('end of walk, parked on the last statement');
+      return void this.stopAt('end');
+    }
+    this.log('end of walk, session terminated');
     this.ui.clear();
     this.sendEvent(new TerminatedEvent());
+  }
+
+  /** Leave for good (F5 pressed on the parked end). */
+  private terminate() {
+    this.stack = [];
+    this.end();
   }
 
   /** Report the stop to VS Code, then explain the statement and refresh the UI. */
@@ -684,7 +743,7 @@ export class ExplainSession extends DebugSession {
       this.explanation = explanation;
       const footer =
         reason === 'end'
-          ? '_End of walk — F5/F10 or Shift+F5 to exit, Shift+F11 to go back up._'
+          ? '_End of the walk — nothing runs after this. F5 or Shift+F5 ends the session, ◀ Step Back revisits._'
           : reason === 'auto'
             ? '_Auto-walking — F6 or the status bar to pause._'
             : step.branches

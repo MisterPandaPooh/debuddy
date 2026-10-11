@@ -46,7 +46,7 @@ export interface Explainer {
   summarizeFunction(source: string, reason: string, hints?: string[]): Promise<string>;
   /** Get the current provider ready before the first call. */
   warmUp(opts?: { quiet?: boolean }): Promise<void>;
-  answer(ctx: StatementContext, question: string): Promise<string>;
+  answer(ctx: StatementContext, question: string, history?: QA[]): Promise<string>;
 }
 
 // Prompts validated in bench/bench.mjs and bench/values.mjs against qwen2.5-coder:3b.
@@ -111,6 +111,13 @@ warn = "deprecated key: ssl" | undefined`;
 const ANSWER_SYSTEM = `You answer a developer's question about the statement they are currently stopped on while reading code.
 Use ONLY the context given; say so if it is not enough. Answer in at most 4 short lines, no code fences.`;
 
+/** One Debug Console exchange, kept so the next question can build on it. */
+export interface QA {
+  line: number;
+  q: string;
+  a: string;
+}
+
 export class PromptExplainer implements Explainer {
   private summaries = new Map<string, Promise<string>>();
 
@@ -169,8 +176,12 @@ ${known}${source}`;
     return p;
   }
 
-  async answer(ctx: StatementContext, question: string): Promise<string> {
-    const text = await this.chat(ANSWER_SYSTEM, `${contextPrompt(ctx)}\n\nQuestion: ${question}`, 160);
+  async answer(ctx: StatementContext, question: string, history: QA[] = []): Promise<string> {
+    // Earlier exchanges ride along, so "and why?" or "same for the other one" make sense.
+    const earlier = history.length
+      ? `\n\nEarlier questions in this session (the developer may refer to them):\n${history.map((h) => `Q (L${h.line}): ${h.q}\nA: ${h.a.slice(0, 300)}`).join('\n')}`
+      : '';
+    const text = await this.chat(ANSWER_SYSTEM, `${contextPrompt(ctx)}${earlier}\n\nQuestion: ${question}`, 160);
     return text.trim();
   }
 

@@ -47,6 +47,16 @@ const tick = () => new Promise((r) => setTimeout(r, 50));
     send('continue', { threadId: 1 }); await tick(); await tick();
     return;
   }
+  if (SCENARIO === 'stepin-out') {
+    // `this.blabla(...this.get(k))`: F11 enters get() first (evaluation order); Shift+F11 comes back to
+    // the call site because blabla() is still to be called; F11 enters blabla(); Shift+F11 moves on.
+    send('stepInTargets', { frameId: 0 }); await tick();
+    send('stepIn', { threadId: 1 }); await tick(); send('stackTrace', { threadId: 1 }); await tick();
+    send('stepOut', { threadId: 1 }); await tick(); send('stackTrace', { threadId: 1 }); await tick();
+    send('stepIn', { threadId: 1 }); await tick(); send('stackTrace', { threadId: 1 }); await tick();
+    send('stepOut', { threadId: 1 }); await tick(); send('stackTrace', { threadId: 1 });
+    return;
+  }
   if (SCENARIO === 'skip-body') { send('next', { threadId: 1 }); await tick(); send('stackTrace', { threadId: 1 }); return; }
   if (SCENARIO === 'enter-body') { send('stepIn', { threadId: 1 }); await tick(); send('stackTrace', { threadId: 1 }); return; }
   if (SCENARIO === 'next') { send('next', { threadId: 1 }); await tick(); send('next', { threadId: 1 }); await tick(); send('stackTrace', { threadId: 1 }); return; }

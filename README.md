@@ -90,7 +90,9 @@ subscription you already have. See [Model providers](#model-providers).
 | Put the cursor on a line, <kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>E</kbd> (Win/Linux <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd>) | the session starts there; the first card appears |
 | <kbd>F10</kbd> | next statement, explained |
 | <kbd>F11</kbd> on `getUser(id)` | inside `getUser`, with its summary and who calls it |
-| <kbd>⇧</kbd>+<kbd>F11</kbd> | back to the call site, on the next statement |
+| <kbd>⇧</kbd>+<kbd>F11</kbd> | back to the call site — on the next statement, or still on this one if an outer call remains (`a(b())` after `b`) |
+| *Step Into Target…* (editor context menu) | pick which call of the statement to enter, in evaluation order |
+| end of the function | the walk parks on the last statement, like a debugger at the end of `main()`; <kbd>F5</kbd> or <kbd>⇧</kbd>+<kbd>F5</kbd> ends the session |
 | <kbd>F10</kbd> on an `if … else` | *then / else / both* — pick the path to read |
 | <kbd>F10</kbd> / <kbd>F11</kbd> on a lone `if` or a loop | the condition's value is unknown: <kbd>F10</kbd> stays on the main path (skips the block), <kbd>F11</kbd> reads it; guards (`if (x) return …`) are flagged as such |
 | <kbd>F10</kbd> on a `throw` | jumps to the `catch` that receives it, or says it leaves the function |

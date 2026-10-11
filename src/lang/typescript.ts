@@ -120,6 +120,8 @@ function collectCalls(n: ts.Node, doc: vscode.TextDocument) {
   const calls: Step['calls'] = [];
   const visit = (c: ts.Node) => {
     if (ts.isFunctionLike(c)) return;
+    // Arguments first: evaluation order, so `a(...b())` lists b before a and Step Into enters b first.
+    ts.forEachChild(c, visit);
     if (ts.isCallExpression(c) || ts.isNewExpression(c)) {
       const callee = c.expression;
       const id = ts.isPropertyAccessExpression(callee) ? callee.name : callee;
@@ -127,7 +129,6 @@ function collectCalls(n: ts.Node, doc: vscode.TextDocument) {
         calls.push({ name: callee.getText(), position: doc.positionAt(id.getStart()) });
       }
     }
-    ts.forEachChild(c, visit);
   };
   visit(n);
   return calls;

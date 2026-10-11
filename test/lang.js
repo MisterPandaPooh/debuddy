@@ -12,6 +12,7 @@ const cases = [
   ['sample/orders.py', 10],
   ['sample/orders.rs', 8],
   ['test/fixtures/throwflow.ts', 10],
+  ['test/fixtures/spread.ts', 9],
 ];
 
 (async () => {
