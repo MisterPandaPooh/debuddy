@@ -1,6 +1,6 @@
 # Changelog — DeBuddy
 
-## Unreleased
+## 0.1.4 — 2026-10-11
 
 - Calls inside a statement are listed in evaluation order (`a(...b())` → `b`, then `a`): Step
   Into enters the inner call first, Step Out comes back to the call site while an outer call
